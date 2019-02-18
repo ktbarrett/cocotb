@@ -25,8 +25,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************************************************************/
 
-#ifndef COCOTB_VPI_IMPL_H_ 
-#define COCOTB_VPI_IMPL_H_ 
+#ifndef COCOTB_VPI_IMPL_H_
+#define COCOTB_VPI_IMPL_H_
 
 #include "../gpi/gpi_priv.h"
 #include <sv_vpi_user.h>
@@ -175,8 +175,8 @@ public:
 
 class VpiArrayObjHdl : public GpiObjHdl {
 public:
-    VpiArrayObjHdl(GpiImplInterface *impl, vpiHandle hdl, gpi_objtype_t objtype) :
-                                                             GpiObjHdl(impl, hdl, objtype) { }
+    VpiArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, vpiHandle hdl, gpi_objtype_t objtype) :
+                                                             GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VpiArrayObjHdl() { }
 
     int initialise(std::string &name, std::string &fq_name);
@@ -184,8 +184,8 @@ public:
 
 class VpiObjHdl : public GpiObjHdl {
 public:
-    VpiObjHdl(GpiImplInterface *impl, vpiHandle hdl, gpi_objtype_t objtype) :
-                                                             GpiObjHdl(impl, hdl, objtype) { }
+    VpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, vpiHandle hdl, gpi_objtype_t objtype) :
+                                                             GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VpiObjHdl() { }
 
     int initialise(std::string &name, std::string &fq_name);
@@ -193,8 +193,8 @@ public:
 
 class VpiSignalObjHdl : public GpiSignalObjHdl {
 public:
-    VpiSignalObjHdl(GpiImplInterface *impl, vpiHandle hdl, gpi_objtype_t objtype, bool is_const) :
-                                                             GpiSignalObjHdl(impl, hdl, objtype, is_const),
+    VpiSignalObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, vpiHandle hdl, gpi_objtype_t objtype, bool is_const) :
+                                                             GpiSignalObjHdl(impl, parent, hdl, objtype, is_const),
                                                              m_rising_cb(impl, this, GPI_RISING),
                                                              m_falling_cb(impl, this, GPI_FALLING),
                                                              m_either_cb(impl, this, GPI_FALLING | GPI_RISING) { }
@@ -289,7 +289,8 @@ public:
     GpiObjHdl* native_check_create(int32_t index, GpiObjHdl *parent);
     GpiObjHdl* native_check_create(void *raw_hdl, GpiObjHdl *parent);
     const char * reason_to_string(int reason);
-    GpiObjHdl* create_gpi_obj_from_handle(vpiHandle new_hdl,
+    GpiObjHdl* create_gpi_obj_from_handle(GpiObjHdl *parent,
+                                          vpiHandle new_hdl,
                                           std::string &name,
                                           std::string &fq_name);
 

@@ -197,7 +197,7 @@ int VhpiObjHdl::initialise(std::string &name, std::string &fq_name) {
                 str = vhpi_get_str(vhpiNameP, pu_handle);
                 if (str != NULL)
                     m_definition_name = str;
-      
+
                 str = vhpi_get_str(vhpiFileNameP, pu_handle);
                 if (str != NULL)
                     m_definition_file = str;
@@ -794,7 +794,7 @@ VhpiTimedCbHdl::VhpiTimedCbHdl(GpiImplInterface *impl, uint64_t time_ps) : GpiCb
                                                                            VhpiCbHdl(impl)
 {
     vhpi_time.high = (uint32_t)(time_ps>>32);
-    vhpi_time.low  = (uint32_t)(time_ps); 
+    vhpi_time.low  = (uint32_t)(time_ps);
 
     cb_data.reason = vhpiCbAfterDelay;
     cb_data.time = &vhpi_time;
@@ -950,7 +950,7 @@ VhpiIterator::VhpiIterator(GpiImplInterface *impl, GpiObjHdl *hdl) : GpiIterator
         return;
     }
 
-    LOG_DEBUG("Created iterator working from scope %d (%s)", 
+    LOG_DEBUG("Created iterator working from scope %d (%s)",
              vhpi_get(vhpiKindP, vhpi_hdl),
              vhpi_get_str(vhpiKindStrP, vhpi_hdl));
 
@@ -1122,7 +1122,7 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
         fq_name += "." + name;
     }
     VhpiImpl *vhpi_impl = reinterpret_cast<VhpiImpl*>(m_impl);
-    new_obj = vhpi_impl->create_gpi_obj_from_handle(obj, name, fq_name);
+    new_obj = vhpi_impl->create_gpi_obj_from_handle(m_parent, obj, name, fq_name);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;

@@ -54,7 +54,7 @@ int VpiCbHdl::arm_callback(void) {
 
     if (m_state == GPI_PRIMED) {
         fprintf(stderr,
-                "Attempt to prime an already primed trigger for %s!\n", 
+                "Attempt to prime an already primed trigger for %s!\n",
                 m_impl->reason_to_string(cb_data.reason));
     }
 
@@ -78,7 +78,7 @@ int VpiCbHdl::arm_callback(void) {
     } else {
         m_state = GPI_PRIMED;
     }
-    
+
     m_obj_hdl = new_hdl;
 
     return 0;
@@ -401,7 +401,7 @@ GpiCbHdl * VpiSignalObjHdl::value_change_cb(unsigned int edge)
 
 VpiValueCbHdl::VpiValueCbHdl(GpiImplInterface *impl,
                              VpiSignalObjHdl *sig,
-                             int edge) :GpiCbHdl(impl), 
+                             int edge) :GpiCbHdl(impl),
                                         VpiCbHdl(impl),
                                         GpiValueCbHdl(impl,sig,edge)
 {
@@ -720,7 +720,7 @@ GpiIterator::Status VpiSingleIterator::next_handle(std::string &name,
     LOG_DEBUG("vpi_scan found '%s = '%s'", name.c_str(), fq_name.c_str());
 
     VpiImpl *vpi_impl = reinterpret_cast<VpiImpl*>(m_impl);
-    new_obj = vpi_impl->create_gpi_obj_from_handle(obj, name, fq_name);
+    new_obj = vpi_impl->create_gpi_obj_from_handle(m_parent, obj, name, fq_name);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;
@@ -868,7 +868,7 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
 
     LOG_DEBUG("vpi_scan found '%s'", fq_name.c_str());
     VpiImpl *vpi_impl = reinterpret_cast<VpiImpl*>(m_impl);
-    new_obj = vpi_impl->create_gpi_obj_from_handle(obj, name, fq_name);
+    new_obj = vpi_impl->create_gpi_obj_from_handle(m_parent, obj, name, fq_name);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;

@@ -93,37 +93,42 @@ protected:
 // that construct an object derived from GpiSignalObjHdl or GpiObjHdl
 class GpiObjHdl : public GpiHdl {
 public:
-    GpiObjHdl(GpiImplInterface *impl) : GpiHdl(impl, NULL),
-                                        m_num_elems(0),
-                                        m_indexable(false),
-                                        m_range_left(-1),
-                                        m_range_right(-1),
-                                        m_fullname("unknown"),
-                                        m_type(GPI_UNKNOWN),
-                                        m_const(false) { }
-    GpiObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype_t objtype) : GpiHdl(impl, hdl),
-                                                                          m_num_elems(0),
-                                                                          m_indexable(false),
-                                                                          m_range_left(-1),
-                                                                          m_range_right(-1),
-                                                                          m_fullname("unknown"),
-                                                                          m_type(objtype),
-                                                                          m_const(false) { }
-    GpiObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype_t objtype, bool is_const) :
-                                                                          GpiHdl(impl, hdl),
-                                                                          m_num_elems(0),
-                                                                          m_indexable(false),
-                                                                          m_range_left(-1),
-                                                                          m_range_right(-1),
-                                                                          m_fullname("unknown"),
-                                                                          m_type(objtype),
-                                                                          m_const(is_const) { }
+    GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent) : GpiHdl(impl, NULL),
+                                                           m_parent(parent),
+                                                           m_num_elems(0),
+                                                           m_indexable(false),
+                                                           m_range_left(-1),
+                                                           m_range_right(-1),
+                                                           m_fullname("unknown"),
+                                                           m_type(GPI_UNKNOWN),
+                                                           m_const(false) { }
+    GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) :
+                                                           GpiHdl(impl, hdl),
+                                                           m_parent(parent),
+                                                           m_num_elems(0),
+                                                           m_indexable(false),
+                                                           m_range_left(-1),
+                                                           m_range_right(-1),
+                                                           m_fullname("unknown"),
+                                                           m_type(objtype),
+                                                           m_const(false) { }
+    GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype, bool is_const) :
+                                                           GpiHdl(impl, hdl),
+                                                           m_parent(parent),
+                                                           m_num_elems(0),
+                                                           m_indexable(false),
+                                                           m_range_left(-1),
+                                                           m_range_right(-1),
+                                                           m_fullname("unknown"),
+                                                           m_type(objtype),
+                                                           m_const(is_const) { }
     virtual ~GpiObjHdl() { }
 
     virtual const char* get_name_str(void);
     virtual const char* get_fullname_str(void);
     virtual const char* get_type_str(void);
     gpi_objtype_t get_type(void) { return m_type; };
+    GpiObjHdl *get_parent(void) { return m_parent; };
     bool get_const(void) { return m_const; };
     int get_num_elems(void) {
         LOG_DEBUG("%s has %d elements", m_name.c_str(), m_num_elems);
@@ -143,18 +148,20 @@ public:
     virtual int initialise(std::string &name, std::string &full_name);
 
 protected:
-    int           m_num_elems;
-    bool          m_indexable;
-    int           m_range_left;
-    int           m_range_right;
-    std::string   m_name;
-    std::string   m_fullname;
+    GpiObjHdl     *m_parent;
 
-    std::string   m_definition_name;
-    std::string   m_definition_file;
+    int            m_num_elems;
+    bool           m_indexable;
+    int            m_range_left;
+    int            m_range_right;
+    std::string    m_name;
+    std::string    m_fullname;
 
-    gpi_objtype_t m_type;
-    bool          m_const;
+    std::string    m_definition_name;
+    std::string    m_definition_file;
+
+    gpi_objtype_t  m_type;
+    bool           m_const;
 };
 
 
@@ -164,8 +171,8 @@ protected:
 // value of the signal (which doesn't apply to non signal items in the hierarchy
 class GpiSignalObjHdl : public GpiObjHdl {
 public:
-    GpiSignalObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype_t objtype, bool is_const) : 
-                                                         GpiObjHdl(impl, hdl, objtype, is_const),
+    GpiSignalObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype, bool is_const) :
+                                                         GpiObjHdl(impl, parent, hdl, objtype, is_const),
                                                          m_length(0) { }
     virtual ~GpiSignalObjHdl() { }
     // Provide public access to the implementation (composition vs inheritance)
@@ -188,7 +195,7 @@ public:
 
 /* GPI Callback handle */
 // To set a callback it needs the signal to do this on,
-// vpiHandle/vhpiHandleT for instance. The 
+// vpiHandle/vhpiHandleT for instance. The
 class GpiCbHdl : public GpiHdl {
 public:
     GpiCbHdl(GpiImplInterface *impl) : GpiHdl(impl, NULL),

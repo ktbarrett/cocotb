@@ -25,8 +25,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************************************************************/
 
-#ifndef COCOTB_VHPI_IMPL_H_ 
-#define COCOTB_VHPI_IMPL_H_ 
+#ifndef COCOTB_VHPI_IMPL_H_
+#define COCOTB_VHPI_IMPL_H_
 
 #include "../gpi/gpi_priv.h"
 #include <vhpi_user.h>
@@ -84,7 +84,7 @@ static inline int __check_vhpi_error(const char *file, const char *func, long li
 
 class VhpiCbHdl : public virtual GpiCbHdl {
 public:
-    VhpiCbHdl(GpiImplInterface *impl); 
+    VhpiCbHdl(GpiImplInterface *impl);
     virtual ~VhpiCbHdl() { }
 
     virtual int arm_callback(void);
@@ -161,8 +161,9 @@ public:
 class VhpiArrayObjHdl : public GpiObjHdl {
 public:
     VhpiArrayObjHdl(GpiImplInterface *impl,
+                    GpiObjHdl *parent,
                     vhpiHandleT hdl,
-                    gpi_objtype_t objtype) : GpiObjHdl(impl, hdl, objtype) { }
+                    gpi_objtype_t objtype) : GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VhpiArrayObjHdl() { }
 
     int initialise(std::string &name, std::string &fq_name);
@@ -171,8 +172,9 @@ public:
 class VhpiObjHdl : public GpiObjHdl {
 public:
     VhpiObjHdl(GpiImplInterface *impl,
+               GpiObjHdl *parent,
                vhpiHandleT hdl,
-               gpi_objtype_t objtype) : GpiObjHdl(impl, hdl, objtype) { }
+               gpi_objtype_t objtype) : GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VhpiObjHdl() { }
 
     int initialise(std::string &name, std::string &fq_name);
@@ -181,9 +183,10 @@ public:
 class VhpiSignalObjHdl : public GpiSignalObjHdl {
 public:
     VhpiSignalObjHdl(GpiImplInterface *impl,
+                     GpiObjHdl *parent,
                      vhpiHandleT hdl,
                      gpi_objtype_t objtype,
-                     bool is_const) : GpiSignalObjHdl(impl, hdl, objtype, is_const),
+                     bool is_const) : GpiSignalObjHdl(impl, parent, hdl, objtype, is_const),
                                       m_rising_cb(impl, this, GPI_RISING),
                                       m_falling_cb(impl, this, GPI_FALLING),
                                       m_either_cb(impl, this, GPI_FALLING | GPI_RISING) { }
@@ -215,9 +218,10 @@ protected:
 class VhpiLogicSignalObjHdl : public VhpiSignalObjHdl {
 public:
     VhpiLogicSignalObjHdl(GpiImplInterface *impl,
-                         vhpiHandleT hdl,
-                         gpi_objtype_t objtype,
-                         bool is_const) : VhpiSignalObjHdl(impl, hdl, objtype, is_const) { }
+                          GpiObjHdl *parent,
+                          vhpiHandleT hdl,
+                          gpi_objtype_t objtype,
+                          bool is_const) : VhpiSignalObjHdl(impl, parent, hdl, objtype, is_const) { }
 
     virtual ~VhpiLogicSignalObjHdl() { }
 
@@ -272,7 +276,8 @@ public:
     const char * reason_to_string(int reason);
     const char * format_to_string(int format);
 
-    GpiObjHdl *create_gpi_obj_from_handle(vhpiHandleT new_hdl,
+    GpiObjHdl *create_gpi_obj_from_handle(GpiObjHdl *parent,
+                                          vhpiHandleT new_hdl,
                                           std::string &name,
                                           std::string &fq_name);
 

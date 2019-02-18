@@ -83,15 +83,15 @@ void FliVariableObjIntf::mti_set_value(mtiLongT value)
 }
 
 
-FliArrayObjHdl::FliArrayObjHdl(GpiImplInterface *impl, mtiSignalIdT hdl) :
-                   GpiObjHdl(impl, hdl, GPI_ARRAY)
+FliArrayObjHdl::FliArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiSignalIdT hdl) :
+                   GpiObjHdl(impl, parent, hdl, GPI_ARRAY)
 {
     m_fli_intf = new FliSignalObjIntf(hdl);
 }
 
 
-FliArrayObjHdl::FliArrayObjHdl(GpiImplInterface *impl, mtiVariableIdT hdl, bool is_const) :
-                   GpiObjHdl(impl, hdl, GPI_ARRAY, is_const)
+FliArrayObjHdl::FliArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiVariableIdT hdl, bool is_const) :
+                   GpiObjHdl(impl, parent, hdl, GPI_ARRAY, is_const)
 {
     m_fli_intf = new FliVariableObjIntf(hdl);
 }
@@ -114,15 +114,15 @@ int FliArrayObjHdl::initialise(std::string &name, std::string &fq_name)
 }
 
 
-FliRecordObjHdl::FliRecordObjHdl(GpiImplInterface *impl, mtiSignalIdT hdl) :
-                   GpiObjHdl(impl, hdl, GPI_STRUCTURE)
+FliRecordObjHdl::FliRecordObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiSignalIdT hdl) :
+                   GpiObjHdl(impl, parent, hdl, GPI_STRUCTURE)
 {
     m_fli_intf = new FliSignalObjIntf(hdl);
 }
 
 
-FliRecordObjHdl::FliRecordObjHdl(GpiImplInterface *impl, mtiVariableIdT hdl, bool is_const) :
-                   GpiObjHdl(impl, hdl, GPI_STRUCTURE, is_const)
+FliRecordObjHdl::FliRecordObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiVariableIdT hdl, bool is_const) :
+                   GpiObjHdl(impl, parent, hdl, GPI_STRUCTURE, is_const)
 {
     m_fli_intf = new FliVariableObjIntf(hdl);
 }
@@ -156,16 +156,16 @@ int FliObjHdl::initialise(std::string &name, std::string &fq_name)
     return GpiObjHdl::initialise(name, fq_name);
 }
 
-FliValueObjHdl::FliValueObjHdl(GpiImplInterface *impl, mtiSignalIdT hdl, gpi_objtype_t objtype) :
-                   GpiSignalObjHdl(impl, hdl, objtype, false)
+FliValueObjHdl::FliValueObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiSignalIdT hdl, gpi_objtype_t objtype) :
+                   GpiSignalObjHdl(impl, parent, hdl, objtype, false)
 {
     m_fli_intf   = new FliSignalObjIntf(hdl);
     m_rising_cb  = new FliSignalCbHdl(m_impl, this, GPI_RISING);
     m_falling_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING);
     m_either_cb  = new FliSignalCbHdl(m_impl, this, GPI_FALLING | GPI_RISING);
 }
-FliValueObjHdl::FliValueObjHdl(GpiImplInterface *impl, mtiVariableIdT hdl, gpi_objtype_t objtype, bool is_const) :
-                   GpiSignalObjHdl(impl, hdl, objtype, is_const)
+FliValueObjHdl::FliValueObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiVariableIdT hdl, gpi_objtype_t objtype, bool is_const) :
+                   GpiSignalObjHdl(impl, parent, hdl, objtype, is_const)
 {
     m_fli_intf   = new FliVariableObjIntf(hdl);
     m_rising_cb  = NULL;

@@ -220,7 +220,8 @@ bool is_enum_boolean(vhpiHandleT hdl) {
     return false;
 }
 
-GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(vhpiHandleT new_hdl,
+GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
+                                                vhpiHandleT new_hdl,
                                                 std::string &name,
                                                 std::string &fq_name)
 {
@@ -389,13 +390,13 @@ create:
 
     if (gpi_type != GPI_ARRAY && gpi_type != GPI_GENARRAY && gpi_type != GPI_MODULE && gpi_type != GPI_STRUCTURE) {
         if (gpi_type == GPI_REGISTER)
-            new_obj = new VhpiLogicSignalObjHdl(this, new_hdl, gpi_type, is_const(new_hdl));
+            new_obj = new VhpiLogicSignalObjHdl(this, parent, new_hdl, gpi_type, is_const(new_hdl));
         else
-            new_obj = new VhpiSignalObjHdl(this, new_hdl, gpi_type, is_const(new_hdl));
+            new_obj = new VhpiSignalObjHdl(this, parent, new_hdl, gpi_type, is_const(new_hdl));
     } else if (gpi_type == GPI_ARRAY) {
-        new_obj = new VhpiArrayObjHdl(this, new_hdl, gpi_type);
+        new_obj = new VhpiArrayObjHdl(this, parent, new_hdl, gpi_type);
     } else {
-        new_obj = new VhpiObjHdl(this, new_hdl, gpi_type);
+        new_obj = new VhpiObjHdl(this, parent, new_hdl, gpi_type);
     }
 
     if (new_obj->initialise(name, fq_name)) {
@@ -431,7 +432,7 @@ GpiObjHdl *VhpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
         fq_name += "." + name;
     }
 
-    GpiObjHdl* new_obj = create_gpi_obj_from_handle(new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_gpi_obj_from_handle(parent, new_hdl, name, fq_name);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -499,7 +500,7 @@ GpiObjHdl *VhpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
     }
 
     /* Generate Loops have inconsistent behavior across vhpi.  A "name"
-     * without an index, i.e. dut.loop vs dut.loop(0), may or may not map to 
+     * without an index, i.e. dut.loop vs dut.loop(0), may or may not map to
      * to the start index.  If it doesn't then it won't find anything.
      *
      * If this unique case is hit, we need to create the Pseudo-region, with the handle
@@ -511,7 +512,7 @@ GpiObjHdl *VhpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
         new_hdl = vhpi_hdl;
     }
 
-    GpiObjHdl* new_obj = create_gpi_obj_from_handle(new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_gpi_obj_from_handle(parent, new_hdl, name, fq_name);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -742,7 +743,7 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
         return NULL;
     }
 
-    GpiObjHdl* new_obj = create_gpi_obj_from_handle(new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_gpi_obj_from_handle(parent, new_hdl, name, fq_name);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Could not fetch object below entity (%s) at index (%d)",
@@ -819,7 +820,7 @@ GpiObjHdl *VhpiImpl::get_root_handle(const char* name)
 
     root_name = found;
 
-    return create_gpi_obj_from_handle(dut, root_name, root_name);
+    return create_gpi_obj_from_handle(NULL, dut, root_name, root_name);
 
 }
 
