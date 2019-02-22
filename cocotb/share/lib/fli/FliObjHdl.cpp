@@ -66,7 +66,7 @@ int FliSignalObjHdl::initialise(std::string &name, std::string &fq_name, fli_typ
             return -1;
         }
         if ((m_falling_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING)) == NULL) {
-            LOG_CRITICAL("Failed to allocate memory for Fallingg-Edge Callback. (%s (%s))", name.c_str(), get_type_str());
+            LOG_CRITICAL("Failed to allocate memory for Falling-Edge Callback. (%s (%s))", name.c_str(), get_type_str());
             return -1;
         }
         if ((m_either_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING | GPI_RISING)) == NULL) {
