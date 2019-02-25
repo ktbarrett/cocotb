@@ -65,8 +65,6 @@ public:
     GpiHdl(GpiImplInterface *impl) : m_impl(impl), m_obj_hdl(NULL) { }
     GpiHdl(GpiImplInterface *impl, void *hdl) : m_impl(impl), m_obj_hdl(hdl) { }
     virtual ~GpiHdl() { }
-    virtual int initialise(std::string &name);                   // Post constructor init
-
 
     template<typename T> T get_handle(void) const {
         return static_cast<T>(m_obj_hdl);
@@ -145,7 +143,7 @@ public:
     virtual const char* get_definition_file() { return m_definition_file.c_str(); };
 
     bool is_native_impl(GpiImplInterface *impl);
-    virtual int initialise(std::string &name, std::string &full_name);
+    virtual int initialise(std::string &name, std::string &full_name);                   // Post constructor init
 
 protected:
     GpiObjHdl     *m_parent;
