@@ -179,7 +179,7 @@ public:
                                                              GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VpiArrayObjHdl() { }
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 };
 
 class VpiObjHdl : public GpiObjHdl {
@@ -188,7 +188,7 @@ public:
                                                              GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VpiObjHdl() { }
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 };
 
 class VpiSignalObjHdl : public GpiSignalObjHdl {
@@ -211,7 +211,7 @@ public:
 
     /* Value change callback accessor */
     GpiCbHdl *value_change_cb(unsigned int edge);
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 
 private:
     int set_signal_value(s_vpi_value value);

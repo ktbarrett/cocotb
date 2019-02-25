@@ -228,6 +228,7 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
     vhpiIntT type;
     gpi_objtype_t gpi_type;
     GpiObjHdl *new_obj = NULL;
+    GpiObjHdlId id = {name, fq_name};
 
     if (vhpiVerilog == (type = vhpi_get(vhpiKindP, new_hdl))) {
         LOG_DEBUG("vhpiVerilog returned from vhpi_get(vhpiType, ...)")
@@ -399,7 +400,7 @@ create:
         new_obj = new VhpiObjHdl(this, parent, new_hdl, gpi_type);
     }
 
-    if (new_obj->initialise(name, fq_name)) {
+    if (new_obj->initialise(id)) {
         delete new_obj;
         new_obj = NULL;
     }

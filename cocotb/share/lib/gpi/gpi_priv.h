@@ -43,6 +43,11 @@ typedef enum gpi_cb_state {
     GPI_DELETE = 4,
 } gpi_cb_state_e;
 
+typedef struct GpiObjHdlId_s {
+    std::string name;
+    std::string fullname;
+} GpiObjHdlId;
+
 class GpiCbHdl;
 class GpiImplInterface;
 class GpiIterator;
@@ -97,7 +102,6 @@ public:
                                                            m_indexable(false),
                                                            m_range_left(-1),
                                                            m_range_right(-1),
-                                                           m_fullname("unknown"),
                                                            m_type(GPI_UNKNOWN),
                                                            m_const(false) { }
     GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) :
@@ -107,7 +111,6 @@ public:
                                                            m_indexable(false),
                                                            m_range_left(-1),
                                                            m_range_right(-1),
-                                                           m_fullname("unknown"),
                                                            m_type(objtype),
                                                            m_const(false) { }
     GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype, bool is_const) :
@@ -117,7 +120,6 @@ public:
                                                            m_indexable(false),
                                                            m_range_left(-1),
                                                            m_range_right(-1),
-                                                           m_fullname("unknown"),
                                                            m_type(objtype),
                                                            m_const(is_const) { }
     virtual ~GpiObjHdl() { }
@@ -129,7 +131,7 @@ public:
     GpiObjHdl *get_parent(void) { return m_parent; };
     bool get_const(void) { return m_const; };
     int get_num_elems(void) {
-        LOG_DEBUG("%s has %d elements", m_name.c_str(), m_num_elems);
+        LOG_DEBUG("%s has %d elements", m_id.name.c_str(), m_num_elems);
         return m_num_elems;
     }
     int get_range_left(void) { return m_range_left; }
@@ -143,17 +145,16 @@ public:
     virtual const char* get_definition_file() { return m_definition_file.c_str(); };
 
     bool is_native_impl(GpiImplInterface *impl);
-    virtual int initialise(std::string &name, std::string &full_name);                   // Post constructor init
+    virtual int initialise(GpiObjHdlId &id);                   // Post constructor init
 
 protected:
     GpiObjHdl     *m_parent;
+    GpiObjHdlId    m_id;
 
     int            m_num_elems;
     bool           m_indexable;
     int            m_range_left;
     int            m_range_right;
-    std::string    m_name;
-    std::string    m_fullname;
 
     std::string    m_definition_name;
     std::string    m_definition_file;

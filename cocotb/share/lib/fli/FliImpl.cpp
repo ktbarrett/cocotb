@@ -212,7 +212,8 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiRegionIdT h
         new_obj = new FliObjHdl(this, parent, static_cast<mtiRegionIdT>(hdl), GPI_MODULE);
     }
 
-    if (new_obj->initialise(name, fq_name)) {
+    GpiObjHdlId id = {name, fq_name};
+    if (new_obj->initialise(id)) {
         LOG_ERROR("Failed to initialise the handle %s", name.c_str());
         delete new_obj;
         return NULL;
@@ -253,7 +254,8 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiSignalIdT h
             return NULL;
     }
 
-    if (new_obj->initialise(name, fq_name)) {
+    GpiObjHdlId id = {name, fq_name};
+    if (new_obj->initialise(id)) {
         LOG_ERROR("Failed to initialise the handle %s", name.c_str());
         delete new_obj;
         return NULL;
@@ -296,7 +298,8 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiVariableIdT
             return NULL;
     }
 
-    if (new_obj->initialise(name, fq_name)) {
+    GpiObjHdlId id = {name, fq_name};
+    if (new_obj->initialise(id)) {
         LOG_ERROR("Failed to initialise the handle %s", name.c_str());
         delete new_obj;
         return NULL;

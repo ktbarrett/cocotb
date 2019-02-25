@@ -196,7 +196,7 @@ public:
     FliArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiSignalIdT hdl);
     FliArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiVariableIdT hdl, bool is_const);
     virtual ~FliArrayObjHdl();
-    virtual int initialise(std::string &name, std::string &fq_name);
+    virtual int initialise(GpiObjHdlId &id);
 
 protected:
     FliValueObjIntf *m_fli_intf;
@@ -207,7 +207,7 @@ public:
     FliRecordObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiSignalIdT hdl);
     FliRecordObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiVariableIdT hdl, bool is_const);
     virtual ~FliRecordObjHdl();
-    virtual int initialise(std::string &name, std::string &fq_name);
+    virtual int initialise(GpiObjHdlId &id);
 
 protected:
     FliValueObjIntf *m_fli_intf;
@@ -221,7 +221,7 @@ public:
 
     virtual ~FliObjHdl() { }
 
-    virtual int initialise(std::string &name, std::string &fq_name);
+    virtual int initialise(GpiObjHdlId &id);
 };
 
 class FliValueObjHdl : public GpiSignalObjHdl {
@@ -241,7 +241,7 @@ public:
     virtual int set_signal_value(std::string &value);
 
     virtual GpiCbHdl *value_change_cb(unsigned int edge);
-    virtual int initialise(std::string &name, std::string &fq_name);
+    virtual int initialise(GpiObjHdlId &id);
 
 protected:
     FliValueObjIntf *m_fli_intf;
@@ -269,7 +269,7 @@ public:
 
     int set_signal_value(const long value);
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 
 private:
     char             **m_value_enum;    // Do Not Free
@@ -307,7 +307,7 @@ public:
     int set_signal_value(const long value);
     int set_signal_value(std::string &value);
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 
 private:
     char                      *m_val_buff;
@@ -337,7 +337,7 @@ public:
 
     int set_signal_value(const long value);
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 
 private:
     char *m_val_buff;
@@ -357,7 +357,7 @@ public:
 
     int set_signal_value(const double value);
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 };
 
 class FliStringObjHdl : public FliValueObjHdl {
@@ -379,7 +379,7 @@ public:
 
     virtual int set_signal_value(std::string &value);
 
-    virtual int initialise(std::string &name, std::string &fq_name);
+    virtual int initialise(GpiObjHdlId &id);
 
 private:
     char *m_val_buff;

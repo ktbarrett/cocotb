@@ -166,7 +166,7 @@ public:
                     gpi_objtype_t objtype) : GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VhpiArrayObjHdl() { }
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 };
 
 class VhpiObjHdl : public GpiObjHdl {
@@ -177,7 +177,7 @@ public:
                gpi_objtype_t objtype) : GpiObjHdl(impl, parent, hdl, objtype) { }
     virtual ~VhpiObjHdl() { }
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 };
 
 class VhpiSignalObjHdl : public GpiSignalObjHdl {
@@ -204,7 +204,7 @@ public:
 
     /* Value change callback accessor */
     virtual GpiCbHdl *value_change_cb(unsigned int edge);
-    virtual int initialise(std::string &name, std::string &fq_name);
+    virtual int initialise(GpiObjHdlId &id);
 
 protected:
     const vhpiEnumT chr2vhpi(const char value);
@@ -228,7 +228,7 @@ public:
     int set_signal_value(const long value);
     int set_signal_value(std::string &value);
 
-    int initialise(std::string &name, std::string &fq_name);
+    int initialise(GpiObjHdlId &id);
 };
 
 class VhpiIterator : public GpiIterator {

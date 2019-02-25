@@ -126,7 +126,7 @@ bool get_range(vhpiHandleT hdl, vhpiIntT dim, int *left, int *right) {
 
 }
 
-int VhpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VhpiArrayObjHdl::initialise(GpiObjHdlId &id) {
     vhpiHandleT handle = GpiObjHdl::get_handle<vhpiHandleT>();
 
     m_indexable = true;
@@ -143,7 +143,7 @@ int VhpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
     }
 
     if (NULL == type) {
-        LOG_ERROR("Unable to get vhpiBaseType for %s", fq_name.c_str());
+        LOG_ERROR("Unable to get vhpiBaseType for %s", id.fullname.c_str());
         return -1;
     }
 
@@ -154,8 +154,8 @@ int VhpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
     if (num_dim > 1) {
         std::string hdl_name = vhpi_get_str(vhpiCaseNameP, handle);
 
-        if (hdl_name.length() < name.length()) {
-            std::string pseudo_idx = name.substr(hdl_name.length());
+        if (hdl_name.length() < id.name.length()) {
+            std::string pseudo_idx = id.name.substr(hdl_name.length());
 
             while (pseudo_idx.length() > 0) {
                 std::size_t found = pseudo_idx.find_first_of(")");
@@ -173,7 +173,7 @@ int VhpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
     bool error = get_range(handle, dim_idx, &m_range_left, &m_range_right);
 
     if (error) {
-        LOG_ERROR("Unable to obtain constraints for an indexable object %s.", fq_name.c_str());
+        LOG_ERROR("Unable to obtain constraints for an indexable object %s.", id.fullname.c_str());
         return -1;
     }
 
@@ -183,10 +183,10 @@ int VhpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
         m_num_elems = m_range_right - m_range_left + 1;
     }
 
-    return GpiObjHdl::initialise(name, fq_name);
+    return GpiObjHdl::initialise(id);
 }
 
-int VhpiObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VhpiObjHdl::initialise(GpiObjHdlId &id) {
     vhpiHandleT handle = GpiObjHdl::get_handle<vhpiHandleT>();
     if (handle != NULL) {
         vhpiHandleT du_handle = vhpi_handle(vhpiDesignUnit, handle);
@@ -205,10 +205,10 @@ int VhpiObjHdl::initialise(std::string &name, std::string &fq_name) {
         }
     }
 
-    return GpiObjHdl::initialise(name, fq_name);
+    return GpiObjHdl::initialise(id);
 }
 
-int VhpiSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VhpiSignalObjHdl::initialise(GpiObjHdlId &id) {
     // Determine the type of object, either scalar or vector
     m_value.format = vhpiObjTypeVal;
     m_value.bufSize = 0;
@@ -223,12 +223,12 @@ int VhpiSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
     vhpiHandleT handle = GpiObjHdl::get_handle<vhpiHandleT>();
 
     if (0 > vhpi_get_value(get_handle<vhpiHandleT>(), &m_value)) {
-        LOG_ERROR("vhpi_get_value failed for %s (%s)", fq_name.c_str(), vhpi_get_str(vhpiKindStrP, handle));
+        LOG_ERROR("vhpi_get_value failed for %s (%s)", id.fullname.c_str(), vhpi_get_str(vhpiKindStrP, handle));
         return -1;
     }
 
     LOG_DEBUG("Found %s of format type %s (%d) format object with %d elems buffsize %d size %d",
-              name.c_str(),
+              id.name.c_str(),
               ((VhpiImpl*)GpiObjHdl::m_impl)->format_to_string(m_value.format),
               m_value.format,
               m_value.numElems,
@@ -275,14 +275,14 @@ int VhpiSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
         m_binvalue.value.str = (vhpiCharT *)calloc(m_binvalue.bufSize, sizeof(vhpiCharT));
 
         if (!m_binvalue.value.str) {
-            LOG_CRITICAL("Unable to alloc mem for read buffer of signal %s", name.c_str());
+            LOG_CRITICAL("Unable to alloc mem for read buffer of signal %s", id.name.c_str());
         }
     }
 
-    return GpiObjHdl::initialise(name, fq_name);
+    return GpiObjHdl::initialise(id);
 }
 
-int VhpiLogicSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VhpiLogicSignalObjHdl::initialise(GpiObjHdlId &id) {
 
     // Determine the type of object, either scalar or vector
     m_value.format = vhpiLogicVal;
@@ -335,11 +335,11 @@ int VhpiLogicSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
         m_binvalue.value.str = (vhpiCharT *)calloc(m_binvalue.bufSize, sizeof(vhpiCharT));
 
         if (!m_binvalue.value.str) {
-            LOG_CRITICAL("Unable to alloc mem for read buffer of signal %s", name.c_str());
+            LOG_CRITICAL("Unable to alloc mem for read buffer of signal %s", id.name.c_str());
         }
     }
 
-    return GpiObjHdl::initialise(name, fq_name);
+    return GpiObjHdl::initialise(id);
 }
 
 

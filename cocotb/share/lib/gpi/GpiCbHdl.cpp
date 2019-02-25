@@ -30,17 +30,17 @@
 
 const char * GpiObjHdl::get_name_str(void)
 {
-    return m_name.c_str();
+    return m_id.name.c_str();
 }
 
 const char * GpiObjHdl::get_fullname_str(void)
 {
-    return m_fullname.c_str();
+    return m_id.fullname.c_str();
 }
 
 const std::string & GpiObjHdl::get_fullname(void)
 {
-    return m_fullname;
+    return m_id.fullname;
 }
 
 const char * GpiObjHdl::get_type_str(void)
@@ -75,7 +75,7 @@ const char * GpiObjHdl::get_type_str(void)
 
 const std::string & GpiObjHdl::get_name(void)
 {
-    return m_name;
+    return m_id.name;
 }
 
 /* Genertic base clss implementations */
@@ -108,10 +108,10 @@ bool GpiHdl::is_this_impl(GpiImplInterface *impl)
     return impl == this->m_impl;
 }
 
-int GpiObjHdl::initialise(std::string &name, std::string &fq_name)
+int GpiObjHdl::initialise(GpiObjHdlId &id)
 {
-    m_name = name;
-    m_fullname = fq_name;
+    m_id.name = id.name;
+    m_id.fullname = id.fullname;
     return 0;
 }
 

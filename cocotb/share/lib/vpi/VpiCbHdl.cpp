@@ -119,7 +119,7 @@ int VpiCbHdl::cleanup_callback(void)
     return 0;
 }
 
-int VpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VpiArrayObjHdl::initialise(GpiObjHdlId &id) {
     vpiHandle hdl = GpiObjHdl::get_handle<vpiHandle>();
 
     m_indexable   = true;
@@ -130,8 +130,8 @@ int VpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
     std::string hdl_name = vpi_get_str(vpiName, hdl);
 
     /* Removing the hdl_name from the name will leave the pseudo-indices */
-    if (hdl_name.length() < name.length()) {
-        std::string idx_str = name.substr(hdl_name.length());
+    if (hdl_name.length() < id.name.length()) {
+        std::string idx_str = id.name.substr(hdl_name.length());
 
         while (idx_str.length() > 0) {
             std::size_t found = idx_str.find_first_of("]");
@@ -201,10 +201,10 @@ int VpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
         m_num_elems = m_range_right - m_range_left + 1;
     }
 
-    return GpiObjHdl::initialise(name, fq_name);
+    return GpiObjHdl::initialise(id);
 }
 
-int VpiObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VpiObjHdl::initialise(GpiObjHdlId &id) {
     char * str;
     vpiHandle hdl = GpiObjHdl::get_handle<vpiHandle>();
     str = vpi_get_str(vpiDefName, hdl);
@@ -214,10 +214,10 @@ int VpiObjHdl::initialise(std::string &name, std::string &fq_name) {
     if (str != NULL)
         m_definition_file = str;
 
-    return GpiObjHdl::initialise(name, fq_name);
+    return GpiObjHdl::initialise(id);
 }
 
-int VpiSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
+int VpiSignalObjHdl::initialise(GpiObjHdlId &id) {
     int32_t type = vpi_get(vpiType, GpiObjHdl::get_handle<vpiHandle>());
     if ((vpiIntVar == type) ||
         (vpiIntegerVar == type) ||
@@ -275,8 +275,8 @@ int VpiSignalObjHdl::initialise(std::string &name, std::string &fq_name) {
             }
         }
     }
-    LOG_DEBUG("VPI: %s initialised with %d elements", name.c_str(), m_num_elems);
-    return GpiObjHdl::initialise(name, fq_name);
+    LOG_DEBUG("VPI: %s initialised with %d elements", id.name.c_str(), m_num_elems);
+    return GpiObjHdl::initialise(id);
 }
 
 const char* VpiSignalObjHdl::get_signal_value_binstr(void)

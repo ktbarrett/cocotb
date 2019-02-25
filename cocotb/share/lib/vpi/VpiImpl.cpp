@@ -211,7 +211,8 @@ GpiObjHdl* VpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
             return NULL;
     }
 
-    new_obj->initialise(name, fq_name);
+    GpiObjHdlId id = {name, fq_name};
+    new_obj->initialise(id);
 
     LOG_DEBUG("VPI: Created object with type was %s(%d)",
               vpi_get_str(vpiType, new_hdl), type);
@@ -406,6 +407,7 @@ GpiObjHdl *VpiImpl::get_root_handle(const char* name)
     vpiHandle iterator;
     GpiObjHdl *rv;
     std::string root_name;
+    GpiObjHdlId id;
 
     // vpi_iterate with a ref of NULL returns the top level module
     iterator = vpi_iterate(vpiModule, NULL);
@@ -434,7 +436,9 @@ GpiObjHdl *VpiImpl::get_root_handle(const char* name)
 
     root_name = vpi_get_str(vpiFullName, root);
     rv = new GpiObjHdl(this, NULL, root, to_gpi_objtype(vpi_get(vpiType, root)));
-    rv->initialise(root_name, root_name);
+    id.name     = root_name;
+    id.fullname = root_name;
+    rv->initialise(id);
 
     return rv;
 
