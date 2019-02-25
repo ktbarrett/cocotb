@@ -78,6 +78,22 @@ const std::string & GpiObjHdl::get_name(void)
     return m_id.name;
 }
 
+const std::string & GpiObjHdl::get_index_str(void)
+{
+    return m_id.index_str;
+}
+
+
+int32_t GpiObjHdl::get_index(void)
+{
+    return m_id.index;
+}
+
+bool GpiObjHdl::use_index(void)
+{
+    return m_id.use_index;
+}
+
 /* Genertic base clss implementations */
 char *GpiHdl::gpi_copy_name(const char *name)
 {
@@ -110,8 +126,11 @@ bool GpiHdl::is_this_impl(GpiImplInterface *impl)
 
 int GpiObjHdl::initialise(GpiObjHdlId &id)
 {
-    m_id.name = id.name;
-    m_id.fullname = id.fullname;
+    m_id.name      = id.name;
+    m_id.fullname  = id.fullname;
+    m_id.use_index = id.use_index;
+    m_id.index     = id.index;
+    m_id.index_str = id.index_str;
     return 0;
 }
 

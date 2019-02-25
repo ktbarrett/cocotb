@@ -276,10 +276,8 @@ public:
     const char * reason_to_string(int reason);
     const char * format_to_string(int format);
 
-    GpiObjHdl *create_gpi_obj_from_handle(GpiObjHdl *parent,
-                                          vhpiHandleT new_hdl,
-                                          std::string &name,
-                                          std::string &fq_name);
+protected:
+    virtual GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name);
 
 private:
     VhpiReadwriteCbHdl m_read_write;

@@ -719,8 +719,7 @@ GpiIterator::Status VpiSingleIterator::next_handle(std::string &name,
 
     LOG_DEBUG("vpi_scan found '%s = '%s'", name.c_str(), fq_name.c_str());
 
-    VpiImpl *vpi_impl = reinterpret_cast<VpiImpl*>(m_impl);
-    new_obj = vpi_impl->create_gpi_obj_from_handle(m_parent, obj, name, fq_name);
+    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;
@@ -867,8 +866,7 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     }
 
     LOG_DEBUG("vpi_scan found '%s'", fq_name.c_str());
-    VpiImpl *vpi_impl = reinterpret_cast<VpiImpl*>(m_impl);
-    new_obj = vpi_impl->create_gpi_obj_from_handle(m_parent, obj, name, fq_name);
+    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;

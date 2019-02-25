@@ -150,6 +150,36 @@ private:
     uint64_t m_time_ps;
 };
 
+/* Wrapper for the different FLI handles so information
+ * isn't lost when going through the GPI interfaces as
+ * void pointers
+ */
+struct FliHdl {
+    enum{REGION, SIGNAL, VARIABLE} tag;
+    union {
+        mtiRegionIdT   r;
+        mtiSignalIdT   s;
+        mtiVariableIdT v;
+    };
+
+    FliHdl()                                           {}
+    FliHdl(mtiRegionIdT rgn)   : tag(REGION),   r(rgn) {}
+    FliHdl(mtiSignalIdT sig)   : tag(SIGNAL),   s(sig) {}
+    FliHdl(mtiVariableIdT var) : tag(VARIABLE), v(var) {}
+
+    void *get_handle() {
+        switch (tag) {
+            case REGION:
+                return reinterpret_cast<void *>(r);
+            case SIGNAL:
+                return reinterpret_cast<void *>(s);
+            case VARIABLE:
+                return reinterpret_cast<void *>(v);
+        }
+        return reinterpret_cast<void *>(r);
+    }
+};
+
 class FliValueObjIntf {
 public:
     virtual mtiTypeIdT mti_get_type(void) = 0;
@@ -423,11 +453,11 @@ private:
     std::vector<OneToMany> *selected;                            /* Mapping currently in use */
     std::vector<OneToMany>::iterator one2many;
 
-    std::vector<void *> m_vars;
-    std::vector<void *> m_sigs;
-    std::vector<void *> m_regs;
-    std::vector<void *> *m_currentHandles;
-    std::vector<void *>::iterator m_iterator;
+    std::vector<FliHdl> m_vars;
+    std::vector<FliHdl> m_sigs;
+    std::vector<FliHdl> m_regs;
+    std::vector<FliHdl> *m_currentHandles;
+    std::vector<FliHdl>::iterator m_iterator;
 };
 
 class FliImpl : public GpiImplInterface {
@@ -460,13 +490,14 @@ public:
     /* Method to provide strings from operation types */
     const char *reason_to_string(int reason);
 
-    /* Method to provide strings from operation types */
-    GpiObjHdl *create_gpi_obj_from_handle(GpiObjHdl *parent, mtiRegionIdT   hdl, std::string &name, std::string &fq_name);
-    GpiObjHdl *create_gpi_obj_from_handle(GpiObjHdl *parent, mtiSignalIdT   hdl, std::string &name, std::string &fq_name);
-    GpiObjHdl *create_gpi_obj_from_handle(GpiObjHdl *parent, mtiVariableIdT hdl, std::string &name, std::string &fq_name);
+protected:
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name);
 
 private:
     gpi_objtype_t get_gpi_obj_type(mtiTypeIdT _typeid);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiRegionIdT   hdl, std::string &name);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiSignalIdT   hdl, std::string &name);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiVariableIdT hdl, std::string &name);
 
 public:
     FliTimerCache cache;

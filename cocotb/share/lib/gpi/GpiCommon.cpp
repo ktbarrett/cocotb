@@ -620,3 +620,53 @@ const char* GpiImplInterface::get_name_c(void) {
 const string& GpiImplInterface::get_name_s(void) {
     return m_name;
 }
+
+GpiObjHdl* GpiImplInterface::create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname)
+{
+    GpiObjHdl *new_obj;
+    GpiObjHdlId id;
+
+    if ((new_obj = create_gpi_obj(parent, hdl, name)) == NULL) {
+        return NULL;
+    }
+
+    id.name      = name;
+    id.fullname  = fullname;
+    id.use_index = false;
+    id.index     = 0;
+    id.index_str = "";
+
+    if (new_obj->initialise(id)) {
+        delete new_obj;
+        new_obj = NULL;
+    }
+
+    return new_obj;
+}
+
+GpiObjHdl* GpiImplInterface::create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, int32_t index)
+{
+    GpiObjHdl *new_obj;
+    GpiObjHdlId id;
+
+    if ((new_obj = create_gpi_obj(parent, hdl, name)) == NULL) {
+        return NULL;
+    }
+
+    char buff[12]; // needs to be large enough to hold -2^31 to 2^31-1 in string form ('-'+10+'\0')
+
+    snprintf(buff, sizeof(buff), "%d", index);
+
+    id.name      = name;
+    id.fullname  = fullname;
+    id.use_index = true;
+    id.index     = index;
+    id.index_str = buff;
+
+    if (new_obj->initialise(id)) {
+        delete new_obj;
+        new_obj = NULL;
+    }
+
+    return new_obj;
+}

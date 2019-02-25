@@ -289,10 +289,9 @@ public:
     GpiObjHdl* native_check_create(int32_t index, GpiObjHdl *parent);
     GpiObjHdl* native_check_create(void *raw_hdl, GpiObjHdl *parent);
     const char * reason_to_string(int reason);
-    GpiObjHdl* create_gpi_obj_from_handle(GpiObjHdl *parent,
-                                          vpiHandle new_hdl,
-                                          std::string &name,
-                                          std::string &fq_name);
+
+protected:
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name);
 
 private:
     /* Singleton callbacks */

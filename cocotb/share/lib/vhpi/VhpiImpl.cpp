@@ -220,15 +220,14 @@ bool is_enum_boolean(vhpiHandleT hdl) {
     return false;
 }
 
-GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
-                                                vhpiHandleT new_hdl,
-                                                std::string &name,
-                                                std::string &fq_name)
+GpiObjHdl *VhpiImpl::create_gpi_obj(GpiObjHdl *parent,
+                                    void *hdl,
+                                    std::string &name)
 {
     vhpiIntT type;
+    vpiHandle new_hdl = static_cast<vhpiHandleT>(hdl);
     gpi_objtype_t gpi_type;
     GpiObjHdl *new_obj = NULL;
-    GpiObjHdlId id = {name, fq_name};
 
     if (vhpiVerilog == (type = vhpi_get(vhpiKindP, new_hdl))) {
         LOG_DEBUG("vhpiVerilog returned from vhpi_get(vhpiType, ...)")
@@ -266,7 +265,7 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
             vhpiIntT num_dim = vhpi_get(vhpiNumDimensionsP, query_hdl);
 
             if (num_dim > 1) {
-                LOG_DEBUG("Detected a MULTI-DIMENSIONAL ARRAY type %s", fq_name.c_str());
+                LOG_DEBUG("Detected a MULTI-DIMENSIONAL ARRAY type %s", name.c_str());
                 gpi_type   = GPI_ARRAY;
             } else {
                 vhpiHandleT elem_base_type_hdl = NULL;
@@ -284,17 +283,17 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
                     elem_base_type    = vhpi_get(vhpiKindP, elem_base_type_hdl);
                     if (elem_base_type == vhpiEnumTypeDeclK) {
                         if (is_enum_logic(elem_base_type_hdl)) {
-                            LOG_DEBUG("Detected a LOGIC VECTOR type %s", fq_name.c_str());
+                            LOG_DEBUG("Detected a LOGIC VECTOR type %s", name.c_str());
                             gpi_type   = GPI_REGISTER;
                         } else if (is_enum_char(elem_base_type_hdl)) {
-                            LOG_DEBUG("Detected a STRING type %s", fq_name.c_str());
+                            LOG_DEBUG("Detected a STRING type %s", name.c_str());
                             gpi_type   = GPI_STRING;
                         } else {
-                            LOG_DEBUG("Detected a NON-LOGIC ENUM VECTOR type %s", fq_name.c_str());
+                            LOG_DEBUG("Detected a NON-LOGIC ENUM VECTOR type %s", name.c_str());
                             gpi_type   = GPI_ARRAY;
                         }
                     } else {
-                        LOG_DEBUG("Detected a NON-ENUM VECTOR type %s", fq_name.c_str());
+                        LOG_DEBUG("Detected a NON-ENUM VECTOR type %s", name.c_str());
                         gpi_type   = GPI_ARRAY;
                     }
                 } else {
@@ -307,35 +306,35 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
 
         case vhpiEnumTypeDeclK: {
             if (is_enum_logic(query_hdl)) {
-                LOG_DEBUG("Detected a LOGIC type %s", fq_name.c_str());
+                LOG_DEBUG("Detected a LOGIC type %s", name.c_str());
                 gpi_type   = GPI_REGISTER;
             } else if (is_enum_char(query_hdl)) {
-                LOG_DEBUG("Detected a CHAR type %s", fq_name.c_str());
+                LOG_DEBUG("Detected a CHAR type %s", name.c_str());
                 gpi_type   = GPI_INTEGER;
             } else if (is_enum_boolean(query_hdl)) {
-                LOG_DEBUG("Detected a BOOLEAN/INTEGER type %s", fq_name.c_str());
+                LOG_DEBUG("Detected a BOOLEAN/INTEGER type %s", name.c_str());
                 gpi_type   = GPI_INTEGER;
             } else {
-                LOG_DEBUG("Detected an ENUM type %s", fq_name.c_str());
+                LOG_DEBUG("Detected an ENUM type %s", name.c_str());
                 gpi_type   = GPI_ENUM;
             }
             break;
         }
 
         case vhpiIntTypeDeclK: {
-            LOG_DEBUG("Detected an INT type %s", fq_name.c_str());
+            LOG_DEBUG("Detected an INT type %s", name.c_str());
             gpi_type = GPI_INTEGER;
             break;
         }
 
         case vhpiFloatTypeDeclK: {
-            LOG_DEBUG("Detected a REAL type %s", fq_name.c_str());
+            LOG_DEBUG("Detected a REAL type %s", name.c_str());
             gpi_type = GPI_REAL;
             break;
         }
 
         case vhpiRecordTypeDeclK: {
-            LOG_DEBUG("Detected a STRUCTURE type %s", fq_name.c_str());
+            LOG_DEBUG("Detected a STRUCTURE type %s", name.c_str());
             gpi_type   = GPI_STRUCTURE;
             break;
         }
@@ -367,7 +366,7 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(GpiObjHdl *parent,
             }
 
             if (name != hdl_name) {
-                LOG_DEBUG("Found pseudo-region %s", fq_name.c_str());
+                LOG_DEBUG("Found pseudo-region %s", name.c_str());
                 gpi_type = GPI_GENARRAY;
             } else {
                 gpi_type = GPI_MODULE;
@@ -400,11 +399,6 @@ create:
         new_obj = new VhpiObjHdl(this, parent, new_hdl, gpi_type);
     }
 
-    if (new_obj->initialise(id)) {
-        delete new_obj;
-        new_obj = NULL;
-    }
-
 out:
     if (base_hdl != NULL)
         vhpi_release_handle(base_hdl);
@@ -433,7 +427,7 @@ GpiObjHdl *VhpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
         fq_name += "." + name;
     }
 
-    GpiObjHdl* new_obj = create_gpi_obj_from_handle(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -513,7 +507,7 @@ GpiObjHdl *VhpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
         new_hdl = vhpi_hdl;
     }
 
-    GpiObjHdl* new_obj = create_gpi_obj_from_handle(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -744,7 +738,7 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
         return NULL;
     }
 
-    GpiObjHdl* new_obj = create_gpi_obj_from_handle(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, index);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Could not fetch object below entity (%s) at index (%d)",
@@ -821,7 +815,7 @@ GpiObjHdl *VhpiImpl::get_root_handle(const char* name)
 
     root_name = found;
 
-    return create_gpi_obj_from_handle(NULL, dut, root_name, root_name);
+    return create_and_initialise_gpi_obj(NULL, dut, root_name, root_name);
 
 }
 

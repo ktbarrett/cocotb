@@ -46,6 +46,9 @@ typedef enum gpi_cb_state {
 typedef struct GpiObjHdlId_s {
     std::string name;
     std::string fullname;
+    bool use_index;
+    int32_t index;
+    std::string index_str;
 } GpiObjHdlId;
 
 class GpiCbHdl;
@@ -140,6 +143,9 @@ public:
 
     const std::string & get_name(void);
     const std::string & get_fullname(void);
+    const std::string & get_index_str(void);
+    int32_t get_index(void);
+    bool use_index(void);
 
     virtual const char* get_definition_name() { return m_definition_name.c_str(); };
     virtual const char* get_definition_file() { return m_definition_file.c_str(); };
@@ -324,6 +330,8 @@ public:
     virtual GpiObjHdl* native_check_create(void *raw_hdl, GpiObjHdl *parent) = 0;
     virtual GpiObjHdl *get_root_handle(const char *name) = 0;
     virtual GpiIterator *iterate_handle(GpiObjHdl *obj_hdl, gpi_iterator_sel_t type) = 0;
+    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname);
+    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, int32_t index);
 
     /* Callback related, these may (will) return the same handle */
     virtual GpiCbHdl *register_timed_callback(uint64_t time_ps) = 0;
@@ -334,6 +342,9 @@ public:
 
     /* Method to provide strings from operation types */
     virtual const char * reason_to_string(int reason) = 0;
+
+protected:
+    virtual GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name) = 0;
 
 private:
     std::string m_name;

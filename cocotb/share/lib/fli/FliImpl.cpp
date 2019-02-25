@@ -188,12 +188,39 @@ gpi_objtype_t FliImpl::get_gpi_obj_type(mtiTypeIdT _typeid)
     return rv;
 }
 
-
-GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiRegionIdT hdl, std::string &name, std::string &fq_name)
+GpiObjHdl *FliImpl::create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name)
 {
     GpiObjHdl *new_obj = NULL;
 
-    LOG_DEBUG("FLI::Attempting to create GPI object (%s) from handle.", fq_name.c_str());
+    FliHdl *fli_hdl = reinterpret_cast<FliHdl *>(hdl);
+
+    if (fli_hdl == NULL) {
+        LOG_ERROR("FLI::Tried to create GPI object from handle that was not of type FliHdl");
+        return NULL;
+    }
+
+    LOG_DEBUG("FLI::Attempting to create GPI object (%s) from handle.", name.c_str());
+
+    switch (fli_hdl->tag) {
+        case FliHdl::REGION:
+            new_obj = create_gpi_obj(parent, fli_hdl->r, name);
+            break;
+        case FliHdl::SIGNAL:
+            new_obj = create_gpi_obj(parent, fli_hdl->s, name);
+            break;
+        case FliHdl::VARIABLE:
+            new_obj = create_gpi_obj(parent, fli_hdl->v, name);
+            break;
+        default:
+            break;
+    }
+
+    return new_obj;
+}
+
+GpiObjHdl *FliImpl::create_gpi_obj(GpiObjHdl *parent, mtiRegionIdT hdl, std::string &name)
+{
+    GpiObjHdl *new_obj = NULL;
 
     if (!VS_TYPE_IS_VHDL(acc_fetch_fulltype(hdl))) {
         LOG_DEBUG("Handle is not a VHDL type.");
@@ -205,28 +232,19 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiRegionIdT h
      */
     std::string rgn_name = mti_GetRegionName(hdl);
     if (name != rgn_name) {
-        LOG_DEBUG("Found pseudo-region %s -> %p", fq_name.c_str(), hdl);
+        LOG_DEBUG("Found pseudo-region %s -> %p", name.c_str(), hdl);
         new_obj = new FliObjHdl(this, parent, static_cast<mtiRegionIdT>(hdl), GPI_GENARRAY);
     } else {
-        LOG_DEBUG("Found region %s -> %p", fq_name.c_str(), hdl);
+        LOG_DEBUG("Found region %s -> %p", name.c_str(), hdl);
         new_obj = new FliObjHdl(this, parent, static_cast<mtiRegionIdT>(hdl), GPI_MODULE);
-    }
-
-    GpiObjHdlId id = {name, fq_name};
-    if (new_obj->initialise(id)) {
-        LOG_ERROR("Failed to initialise the handle %s", name.c_str());
-        delete new_obj;
-        return NULL;
     }
 
     return new_obj;
 }
 
-GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiSignalIdT hdl, std::string &name, std::string &fq_name)
+GpiObjHdl *FliImpl::create_gpi_obj(GpiObjHdl *parent, mtiSignalIdT hdl, std::string &name)
 {
     GpiObjHdl *new_obj = NULL;
-
-    LOG_DEBUG("FLI::Attempting to create GPI object (%s) from handle.", fq_name.c_str());
 
     switch (get_gpi_obj_type(mti_GetSignalType(hdl))) {
         case GPI_ENUM:
@@ -254,23 +272,14 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiSignalIdT h
             return NULL;
     }
 
-    GpiObjHdlId id = {name, fq_name};
-    if (new_obj->initialise(id)) {
-        LOG_ERROR("Failed to initialise the handle %s", name.c_str());
-        delete new_obj;
-        return NULL;
-    }
-
     return new_obj;
 }
 
-GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiVariableIdT hdl, std::string &name, std::string &fq_name)
+GpiObjHdl *FliImpl::create_gpi_obj(GpiObjHdl *parent, mtiVariableIdT hdl, std::string &name)
 {
     GpiObjHdl *new_obj = NULL;
 
     bool is_const = fli_is_const(hdl);
-
-    LOG_DEBUG("FLI::Attempting to create GPI object (%s) from handle.", fq_name.c_str());
 
     switch (get_gpi_obj_type(mti_GetVarType(hdl))) {
         case GPI_ENUM:
@@ -298,13 +307,6 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(GpiObjHdl *parent, mtiVariableIdT
             return NULL;
     }
 
-    GpiObjHdlId id = {name, fq_name};
-    if (new_obj->initialise(id)) {
-        LOG_ERROR("Failed to initialise the handle %s", name.c_str());
-        delete new_obj;
-        return NULL;
-    }
-
     return new_obj;
 }
 
@@ -323,14 +325,19 @@ GpiObjHdl* FliImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
     std::string name    = c_name;
     std::string fq_name = c_fullname;
 
-    if (fli_is_region(raw_hdl))
-        return create_gpi_obj_from_handle(parent, static_cast<mtiRegionIdT>(raw_hdl), name, fq_name);
-    else if (fli_is_signal(raw_hdl))
-        return create_gpi_obj_from_handle(parent, static_cast<mtiSignalIdT>(raw_hdl), name, fq_name);
-    else if (fli_is_variable(raw_hdl))
-        return create_gpi_obj_from_handle(parent, static_cast<mtiVariableIdT>(raw_hdl), name, fq_name);
-    else
+    FliHdl fli_hdl;
+
+    if (fli_is_region(raw_hdl)) {
+        fli_hdl = FliHdl(static_cast<mtiRegionIdT>(raw_hdl));
+    } else if (fli_is_signal(raw_hdl)) {
+        fli_hdl = FliHdl(static_cast<mtiSignalIdT>(raw_hdl));
+    } else if (fli_is_variable(raw_hdl)) {
+        fli_hdl = FliHdl(static_cast<mtiVariableIdT>(raw_hdl));
+    } else {
         return NULL;
+    }
+
+    return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name);
 }
 
 /**
@@ -375,6 +382,7 @@ GpiObjHdl*  FliImpl::native_check_create(std::string &name, GpiObjHdl *parent)
     mtiRegionIdT rgn;
     mtiSignalIdT sig;
     mtiVariableIdT var;
+    FliHdl fli_hdl;
 
     if (search_rgn && (rgn = mti_FindRegion(&writable[0])) != NULL) {
         /* Generate Loops have inconsistent behavior across fli.  A "name"
@@ -389,20 +397,27 @@ GpiObjHdl*  FliImpl::native_check_create(std::string &name, GpiObjHdl *parent)
         }
 
         LOG_DEBUG("Found region %s -> %p", fq_name.c_str(), rgn);
-        return create_gpi_obj_from_handle(parent, rgn, name, fq_name);
+
+        fli_hdl = FliHdl(rgn);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name);
     } else if (search_sig && (sig = mti_FindSignal(&writable[0])) != NULL) {
         LOG_DEBUG("Found a signal %s -> %p", fq_name.c_str(), sig);
-        return create_gpi_obj_from_handle(parent, sig, name, fq_name);
+
+        fli_hdl = FliHdl(sig);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name);
     } else if (search_var && (var = mti_FindVar(&writable[0])) != NULL) {
         LOG_DEBUG("Found a variable %s -> %p", fq_name.c_str(), var);
-        return create_gpi_obj_from_handle(parent, var, name, fq_name);
+
+        fli_hdl = FliHdl(var);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name);
     } else if (search_rgn){
         /* If not found, check to see if the name of a generate loop and create a pseudo-region */
         for (rgn = mti_FirstLowerRegion(parent->get_handle<mtiRegionIdT>()); rgn != NULL; rgn = mti_NextRegion(rgn)) {
             if (acc_fetch_fulltype(rgn) == accForGenerate) {
                 std::string rgn_name = mti_GetRegionName(rgn);
                 if (rgn_name.compare(0,name.length(),name) == 0) {
-                    return create_gpi_obj_from_handle(parent, mti_HigherRegion(rgn), name, fq_name);
+                    fli_hdl = FliHdl(mti_HigherRegion(rgn));
+                    return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name);
                 }
             }
         }
@@ -422,6 +437,7 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
     gpi_objtype_t obj_type = parent->get_type();
 
     char buff[14];
+    FliHdl fli_hdl;
 
     LOG_DEBUG("Looking for index %d from %s", index, parent->get_name_str());
 
@@ -444,7 +460,8 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             return NULL;
         }
 
-        return create_gpi_obj_from_handle(parent, rgn, name, fq_name);
+        fli_hdl = FliHdl(rgn);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, index);
     } else if (obj_type == GPI_REGISTER || obj_type == GPI_ARRAY || obj_type == GPI_STRING) {
         if (!parent->get_indexable()) {
             LOG_DEBUG("Handle is not indexable");
@@ -484,7 +501,9 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             }
             hdl = handles[norm_idx];
             mti_VsimFree(handles);
-            return create_gpi_obj_from_handle(parent, hdl, name, fq_name);
+
+            fli_hdl = FliHdl(hdl);
+            return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, index);
         } else {
             mtiSignalIdT *handles = mti_GetSignalSubelements(static_cast<mtiSignalIdT>(parent_hdl), NULL);
             mtiSignalIdT hdl;
@@ -495,7 +514,9 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             }
             hdl = handles[norm_idx];
             mti_VsimFree(handles);
-            return create_gpi_obj_from_handle(parent, hdl, name, fq_name);
+
+            fli_hdl = FliHdl(hdl);
+            return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, index);
         }
 
     } else {
@@ -545,6 +566,7 @@ GpiObjHdl *FliImpl::get_root_handle(const char *name)
     char *rgn_fullname;
     std::string root_name;
     std::string root_fullname;
+    FliHdl fli_hdl;
 
     for (root = mti_GetTopRegion(); root != NULL; root = mti_NextRegion(root)) {
         LOG_DEBUG("Iterating over: %s", mti_GetRegionName(root));
@@ -565,7 +587,8 @@ GpiObjHdl *FliImpl::get_root_handle(const char *name)
 
     LOG_DEBUG("Found toplevel: %s, creating handle....", root_name.c_str());
 
-    return create_gpi_obj_from_handle(NULL, root, root_name, root_fullname);
+    fli_hdl = FliHdl(root);
+    return create_and_initialise_gpi_obj(NULL, &fli_hdl, root_name, root_fullname);
 
 error:
 
@@ -762,7 +785,8 @@ FliIterator::FliIterator(GpiImplInterface *impl, GpiObjHdl *hdl) : GpiIterator(i
 
 GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl, void **raw_hdl)
 {
-    HANDLE obj;
+    FliHdl *obj;
+    FliHdl fli_hdl;
     GpiObjHdl *new_obj;
 
     if (!selected)
@@ -779,14 +803,15 @@ GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl,
         obj = NULL;
 
         if (m_iterator != m_currentHandles->end()) {
-            obj = *m_iterator++;
+            fli_hdl = *m_iterator++;
+            obj = &fli_hdl;
 
             /* For GPI_GENARRAY, only allow the generate statements through that match the name
              * of the generate block.
              */
             if (obj_type == GPI_GENARRAY) {
-                if (acc_fetch_fulltype(obj) == accForGenerate) {
-                    std::string rgn_name = mti_GetRegionName(static_cast<mtiRegionIdT>(obj));
+                if (fli_hdl.tag == FliHdl::REGION && acc_fetch_fulltype(fli_hdl.r) == accForGenerate) {
+                    std::string rgn_name = mti_GetRegionName(fli_hdl.r);
                     if (rgn_name.compare(0,parent_name.length(),parent_name) != 0) {
                         obj = NULL;
                         continue;
@@ -844,24 +869,24 @@ GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     switch (*one2many) {
         case FliIterator::OTM_CONSTANTS:
         case FliIterator::OTM_VARIABLE_SUB_ELEMENTS:
-            c_name = mti_GetVarName(static_cast<mtiVariableIdT>(obj));
+            c_name = mti_GetVarName(obj->v);
             break;
         case FliIterator::OTM_SIGNALS:
-            c_name = mti_GetSignalName(static_cast<mtiSignalIdT>(obj));
+            c_name = mti_GetSignalName(obj->s);
             break;
         case FliIterator::OTM_SIGNAL_SUB_ELEMENTS:
-            c_name = mti_GetSignalNameIndirect(static_cast<mtiSignalIdT>(obj), NULL, 0);
+            c_name = mti_GetSignalNameIndirect(obj->s, NULL, 0);
             break;
         case FliIterator::OTM_REGIONS:
-            c_name = mti_GetRegionName(static_cast<mtiRegionIdT>(obj));
+            c_name = mti_GetRegionName(obj->r);
             break;
         default:
             LOG_WARN("Unhandled OneToMany Type (%d)", *one2many);
     }
 
     if (!c_name) {
-        if (!VS_TYPE_IS_VHDL(fli_handle_fulltype(obj))) {
-            *raw_hdl = (void *)obj;
+        if (!VS_TYPE_IS_VHDL(fli_handle_fulltype(obj->get_handle()))) {
+            *raw_hdl = obj->get_handle();
             return GpiIterator::NOT_NATIVE_NO_NAME;
         }
 
@@ -875,13 +900,14 @@ GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl,
      * NOTE: Taking advantage of the "caching" to only create one pseudo-region object.
      *       Otherwise a list would be required and checked while iterating
      */
-    if (*one2many == FliIterator::OTM_REGIONS && obj_type != GPI_GENARRAY && fli_handle_fulltype(obj) == accForGenerate) {
+    if (*one2many == FliIterator::OTM_REGIONS && obj_type != GPI_GENARRAY && acc_fetch_fulltype(fli_hdl.r) == accForGenerate) {
         std::string idx_str = c_name;
         std::size_t found = idx_str.find_last_of("(");
 
         if (found != std::string::npos && found != 0) {
             name        = idx_str.substr(0,found);
-            obj         = m_parent->get_handle<HANDLE>();
+            fli_hdl     = FliHdl(m_parent->get_handle<mtiRegionIdT>());
+            obj         = &fli_hdl;
         } else {
             LOG_WARN("Unhandled Generate Loop Format - %s", name.c_str());
             name = c_name;
@@ -921,18 +947,17 @@ GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl,
         fq_name += "/" + name;
     }
 
-    FliImpl *fli_impl = reinterpret_cast<FliImpl*>(m_impl);
     switch (*one2many) {
         case FliIterator::OTM_CONSTANTS:
         case FliIterator::OTM_VARIABLE_SUB_ELEMENTS:
-            new_obj = fli_impl->create_gpi_obj_from_handle(m_parent, static_cast<mtiVariableIdT>(obj), name, fq_name);
+            new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
             break;
         case FliIterator::OTM_SIGNALS:
         case FliIterator::OTM_SIGNAL_SUB_ELEMENTS:
-            new_obj = fli_impl->create_gpi_obj_from_handle(m_parent, static_cast<mtiSignalIdT>(obj), name, fq_name);
+            new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
             break;
         case FliIterator::OTM_REGIONS:
-            new_obj = fli_impl->create_gpi_obj_from_handle(m_parent, static_cast<mtiRegionIdT>(obj), name, fq_name);
+            new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
             break;
         default:
             break;
@@ -955,7 +980,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType)
 
                 for (id = mti_FirstVarByRegion(parent); id; id = mti_NextVar()) {
                     if (id) {
-                        m_vars.push_back(id);
+                        m_vars.push_back(FliHdl(id));
                     }
                 }
             }
@@ -966,7 +991,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType)
 
                 for (id = mti_FirstSignal(parent); id; id = mti_NextSignal()) {
                     if (id) {
-                        m_sigs.push_back(id);
+                        m_sigs.push_back(FliHdl(id));
                     }
                 }
             }
@@ -977,7 +1002,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType)
 
                 for (id = mti_FirstLowerRegion(parent); id; id = mti_NextRegion(id)) {
                     if (id) {
-                        m_regs.push_back(id);
+                        m_regs.push_back(FliHdl(id));
                     }
                 }
             }
@@ -990,7 +1015,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType)
                 mtiSignalIdT *ids = mti_GetSignalSubelements(parent,NULL);
 
                 for (int i = 0; i < mti_TickLength(type); i++) {
-                    m_sigs.push_back(ids[i]);
+                    m_sigs.push_back(FliHdl(ids[i]));
                 }
                 mti_VsimFree(ids);
             }
@@ -1003,7 +1028,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType)
                 mtiVariableIdT *ids = mti_GetVarSubelements(parent,NULL);
 
                 for (int i = 0; i < mti_TickLength(type); i++) {
-                    m_vars.push_back(ids[i]);
+                    m_vars.push_back(FliHdl(ids[i]));
                 }
 
                 mti_VsimFree(ids);
