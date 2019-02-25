@@ -61,18 +61,9 @@ int FliObjHdl::initialise(std::string &name, std::string &fq_name, fli_type_t fl
 int FliSignalObjHdl::initialise(std::string &name, std::string &fq_name, fli_type_t fli_type)
 {
     if (fli_type == FLI_TYPE_SIGNAL) {
-        if ((m_rising_cb = new FliSignalCbHdl(m_impl, this, GPI_RISING)) == NULL) {
-            LOG_CRITICAL("Failed to allocate memory for Rising-Edge Callback. (%s (%s))", name.c_str(), get_type_str());
-            return -1;
-        }
-        if ((m_falling_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING)) == NULL) {
-            LOG_CRITICAL("Failed to allocate memory for Falling-Edge Callback. (%s (%s))", name.c_str(), get_type_str());
-            return -1;
-        }
-        if ((m_either_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING | GPI_RISING)) == NULL) {
-            LOG_CRITICAL("Failed to allocate memory for Edge Callback. (%s (%s))", name.c_str(), get_type_str());
-            return -1;
-        }
+        m_rising_cb  = new FliSignalCbHdl(m_impl, this, GPI_RISING);
+        m_falling_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING);
+        m_either_cb  = new FliSignalCbHdl(m_impl, this, GPI_FALLING | GPI_RISING);
 
         m_get_value = (mti_GetValue)&mti_GetSignalValue;
         m_set_value = (mti_SetValue)&mti_SetSignalValue;
