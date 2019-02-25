@@ -65,15 +65,15 @@ int FliSignalObjHdl::initialise(std::string &name, std::string &fq_name, fli_typ
         m_falling_cb = new FliSignalCbHdl(m_impl, this, GPI_FALLING);
         m_either_cb  = new FliSignalCbHdl(m_impl, this, GPI_FALLING | GPI_RISING);
 
-        m_get_value = (mti_GetValue)&mti_GetSignalValue;
-        m_set_value = (mti_SetValue)&mti_SetSignalValue;
-        m_get_array_value = (mti_GetArrayValue)&mti_GetArraySignalValue;
-        m_get_value_indirect = (mti_GetValueIndirect)&mti_GetSignalValueIndirect;
+        m_get_value = reinterpret_cast<mti_GetValue>(&mti_GetSignalValue);
+        m_set_value = reinterpret_cast<mti_SetValue>(&mti_SetSignalValue);
+        m_get_array_value = reinterpret_cast<mti_GetArrayValue>(&mti_GetArraySignalValue);
+        m_get_value_indirect = reinterpret_cast<mti_GetValueIndirect>(&mti_GetSignalValueIndirect);
     } else {
-        m_get_value = (mti_GetValue)&mti_GetVarValue;
-        m_set_value = (mti_SetValue)&mti_SetVarValue;
-        m_get_array_value = (mti_GetArrayValue)&mti_GetArrayVarValue;
-        m_get_value_indirect = (mti_GetValueIndirect)&mti_GetVarValueIndirect;
+        m_get_value = reinterpret_cast<mti_GetValue>(&mti_GetVarValue);
+        m_set_value = reinterpret_cast<mti_SetValue>(&mti_SetVarValue);
+        m_get_array_value = reinterpret_cast<mti_GetArrayValue>(&mti_GetArrayVarValue);
+        m_get_value_indirect = reinterpret_cast<mti_GetValueIndirect>(&mti_GetVarValueIndirect);
 
     }
     return GpiObjHdl::initialise(name, fq_name);
