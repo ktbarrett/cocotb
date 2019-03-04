@@ -70,8 +70,7 @@ inline To sim_to_hdl(gpi_sim_hdl input)
 /* Base GPI class others are derived from */
 class GpiHdl {
 public:
-    GpiHdl(GpiImplInterface *impl) : m_impl(impl), m_obj_hdl(NULL) { }
-    GpiHdl(GpiImplInterface *impl, void *hdl) : m_impl(impl), m_obj_hdl(hdl) { }
+    GpiHdl(GpiImplInterface *impl, void *hdl=NULL) : m_impl(impl), m_obj_hdl(hdl) { }
     virtual ~GpiHdl() { }
 
     template<typename T> T get_handle(void) const {
@@ -99,32 +98,20 @@ protected:
 // that construct an object derived from GpiSignalObjHdl or GpiObjHdl
 class GpiObjHdl : public GpiHdl {
 public:
-    GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent) : GpiHdl(impl, NULL),
-                                                           m_parent(parent),
-                                                           m_num_elems(0),
-                                                           m_indexable(false),
-                                                           m_range_left(-1),
-                                                           m_range_right(-1),
-                                                           m_type(GPI_UNKNOWN),
-                                                           m_const(false) { }
-    GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) :
-                                                           GpiHdl(impl, hdl),
-                                                           m_parent(parent),
-                                                           m_num_elems(0),
-                                                           m_indexable(false),
-                                                           m_range_left(-1),
-                                                           m_range_right(-1),
-                                                           m_type(objtype),
-                                                           m_const(false) { }
-    GpiObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype, bool is_const) :
-                                                           GpiHdl(impl, hdl),
-                                                           m_parent(parent),
-                                                           m_num_elems(0),
-                                                           m_indexable(false),
-                                                           m_range_left(-1),
-                                                           m_range_right(-1),
-                                                           m_type(objtype),
-                                                           m_const(is_const) { }
+    GpiObjHdl(GpiImplInterface *impl,
+              GpiObjHdl *parent,
+              void *hdl=NULL,
+              gpi_objtype_t objtype=GPI_UNKNOWN,
+              bool is_const=false) :
+                   GpiHdl(impl, hdl),
+                   m_parent(parent),
+                   m_num_elems(0),
+                   m_indexable(false),
+                   m_range_left(-1),
+                   m_range_right(-1),
+                   m_type(objtype),
+                   m_const(is_const) { }
+
     virtual ~GpiObjHdl() { }
 
     virtual const char* get_name_str(void);
