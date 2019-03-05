@@ -27,6 +27,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************************************************************/
 
+#include <cstdlib>
+
 #include "VpiImpl.h"
 
 extern "C" int32_t handle_vpi_callback(p_cb_data cb_data);
@@ -119,31 +121,20 @@ int VpiCbHdl::cleanup_callback(void)
     return 0;
 }
 
-int VpiArrayObjHdl::initialise(GpiObjHdlId &id) {
-    vpiHandle hdl = GpiObjHdl::get_handle<vpiHandle>();
+int VpiPseudoGenArrayObjHdl::initialise(GpiObjHdlId &id) {
+    return GpiPseudoObjHdl::initialise(id);
+}
 
-    m_indexable   = true;
+int VpiPseudoArrayObjHdl::initialise(GpiObjHdlId &id) {
+    int range_idx   = 1;  // At least one index counting this one
+    GpiObjHdl *current = get_parent();
 
-    int range_idx = 0;
-
-    /* Need to determine if this is a pseudo-handle to be able to select the correct range */
-    std::string hdl_name = vpi_get_str(vpiName, hdl);
-
-    /* Removing the hdl_name from the name will leave the pseudo-indices */
-    if (hdl_name.length() < id.name.length()) {
-        std::string idx_str = id.name.substr(hdl_name.length());
-
-        while (idx_str.length() > 0) {
-            std::size_t found = idx_str.find_first_of("]");
-
-            if (found != std::string::npos) {
-                ++range_idx;
-                idx_str = idx_str.substr(found+1);
-            } else {
-                break;
-            }
-        }
+    while (current->is_pseudo()) {
+        ++range_idx;
+        current = current->get_parent();
     }
+
+    vpiHandle hdl = current->get_handle<vpiHandle>();
 
     /* After determining the range_idx, get the range and set the limits */
     vpiHandle iter = vpi_iterate(vpiRange, hdl);
@@ -175,7 +166,58 @@ int VpiArrayObjHdl::initialise(GpiObjHdlId &id) {
             check_vpi_error();
             m_range_right = val.value.integer;
         }
-    } else if (range_idx == 0) {
+    } else {
+        LOG_CRITICAL("Unable to get range for indexable object");
+        return -1;
+    }
+
+    /* vpiSize will return a size that is incorrect for multi-dimensional arrays so use the range
+     * to calculate the m_num_elems.
+     *
+     *    For example:
+     *       wire [7:0] sig_t4 [0:3][7:4]
+     *
+     *    The size of "sig_t4" will be reported as 16 through the vpi interface.
+     */
+    if (m_range_left > m_range_right) {
+        m_num_elems = m_range_left - m_range_right + 1;
+    } else {
+        m_num_elems = m_range_right - m_range_left + 1;
+    }
+
+    return GpiPseudoObjHdl::initialise(id);
+}
+
+int VpiArrayObjHdl::initialise(GpiObjHdlId &id) {
+    vpiHandle hdl = GpiObjHdl::get_handle<vpiHandle>();
+
+    m_indexable   = true;
+
+    vpiHandle iter = vpi_iterate(vpiRange, hdl);
+
+    s_vpi_value val;
+    val.format = vpiIntVal;
+
+    if (iter != NULL) {
+        vpiHandle rangeHdl;
+
+        rangeHdl = vpi_scan(iter);
+
+        if (rangeHdl == NULL) {
+            LOG_CRITICAL("Unable to get range for indexable object");
+            return -1;
+        } else {
+            vpi_free_object(iter); // Need to free iterator since exited early
+
+            vpi_get_value(vpi_handle(vpiLeftRange,rangeHdl),&val);
+            check_vpi_error();
+            m_range_left = val.value.integer;
+
+            vpi_get_value(vpi_handle(vpiRightRange,rangeHdl),&val);
+            check_vpi_error();
+            m_range_right = val.value.integer;
+        }
+    } else {
         vpi_get_value(vpi_handle(vpiLeftRange,hdl),&val);
         check_vpi_error();
         m_range_left = val.value.integer;
@@ -183,8 +225,6 @@ int VpiArrayObjHdl::initialise(GpiObjHdlId &id) {
         vpi_get_value(vpi_handle(vpiRightRange,hdl),&val);
         check_vpi_error();
         m_range_right = val.value.integer;
-    } else {
-        LOG_CRITICAL("Unable to get range for indexable object");
     }
 
     /* vpiSize will return a size that is incorrect for multi-dimensional arrays so use the range
@@ -719,7 +759,7 @@ GpiIterator::Status VpiSingleIterator::next_handle(std::string &name,
 
     LOG_DEBUG("vpi_scan found '%s = '%s'", name.c_str(), fq_name.c_str());
 
-    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
+    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, false);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;
@@ -734,6 +774,10 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     vpiHandle obj;
     vpiHandle iter_obj = m_parent->get_handle<vpiHandle>();
 
+    bool pseudo = false;
+    bool use_index = false;
+    int32_t index;
+
     if (!selected)
         return GpiIterator::END;
 
@@ -746,28 +790,46 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
         if (m_iterator) {
             obj = vpi_scan(m_iterator);
 
-            /* For GPI_GENARRAY, only allow the generate statements through that match the name
-             * of the generate block.
-             */
-            if (obj != NULL && obj_type == GPI_GENARRAY) {
-                if (vpi_get(vpiType, obj) == vpiGenScope) {
-                    std::string rgn_name = vpi_get_str(vpiName, obj);
-                    if (rgn_name.compare(0,parent_name.length(),parent_name) != 0) {
+            if (obj != NULL) {
+                /* For GPI_GENARRAY, only allow the generate statements through that match the name
+                 * of the generate block.
+                 */
+                if (obj_type == GPI_GENARRAY) {
+                    if (vpi_get(vpiType, obj) == vpiGenScope) {
+                        std::string rgn_name = vpi_get_str(vpiName, obj);
+                        if (rgn_name.compare(0,parent_name.length(),parent_name) != 0) {
+                            obj = NULL;
+                            continue;
+                        }
+                    } else {
                         obj = NULL;
                         continue;
                     }
-                } else {
-                    obj = NULL;
-                    continue;
+                } else if ((*one2many             == vpiInternalScope) &&
+                           (vpi_get(vpiType, obj) == vpiGenScope     )) {
+                    std::string rgn_name = vpi_get_str(vpiFullName, obj);
+                    std::size_t found    = rgn_name.rfind("[");
+
+                    if (found != std::string::npos && found != 0) {
+                        rgn_name = rgn_name.substr(0,found);
+                        if (pseudo_region_exists(rgn_name)) {
+                            LOG_DEBUG("Skipping - Pseudo-Region already exists for %s (%s)", vpi_get_str(vpiFullName, obj),
+                                                                                             vpi_get(vpiType, obj));
+                            obj=NULL;
+                            continue;
+                        }
+                    }
                 }
+
+                LOG_DEBUG("Found an item %s", vpi_get_str(vpiFullName, obj));
+                break;
+
+            } else {
+                LOG_DEBUG("vpi_scan on %d returned NULL", *one2many);
             }
 
-            if (NULL == obj) {
-                /* m_iterator will already be free'd internally here */
-                m_iterator = NULL;
-            } else {
-                break;
-            }
+            /* m_iterator will already be free'd internally here */
+            m_iterator = NULL;
 
             LOG_DEBUG("End of type=%d iteration", *one2many);
         } else {
@@ -818,17 +880,25 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     /*
      * If the parent is not a generate loop, then watch for generate handles and create
      * the pseudo-region.
-     *
-     * NOTE: Taking advantage of the "caching" to only create one pseudo-region object.
-     *       Otherwise a list would be required and checked while iterating
      */
-    if (*one2many == vpiInternalScope && obj_type != GPI_GENARRAY && vpi_get(vpiType, obj) == vpiGenScope) {
+    if (obj_type == GPI_GENARRAY || (*one2many == vpiInternalScope && vpi_get(vpiType, obj) == vpiGenScope)) {
         std::string idx_str = c_name;
         std::size_t found = idx_str.rfind("[");
 
         if (found != std::string::npos && found != 0) {
-            name        = idx_str.substr(0,found);
-            obj         = m_parent->get_handle<vpiHandle>();
+            if (obj_type != GPI_GENARRAY) {
+                name        = idx_str.substr(0,found);
+                obj         = m_parent->get_handle<vpiHandle>();
+
+                std::string fullname = vpi_get_str(vpiFullName, obj);
+                m_pseudo_regions.push_back(fullname.substr(0, fullname.length()-found));
+                pseudo = true;
+            } else {
+                use_index = true;
+                name      = c_name;
+                found    += 1;
+                index     = strtol(name.substr(found).c_str(), NULL, 10);
+            }
         } else {
             name = c_name;
         }
@@ -866,7 +936,12 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     }
 
     LOG_DEBUG("vpi_scan found '%s'", fq_name.c_str());
-    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
+
+    if (use_index)
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, index, pseudo);
+    else
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, pseudo);
+
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;

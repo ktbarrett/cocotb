@@ -173,6 +173,26 @@ public:
     virtual ~VpiShutdownCbHdl() { }
 };
 
+class VpiPseudoGenArrayObjHdl : public GpiPseudoObjHdl {
+public:
+    VpiPseudoGenArrayObjHdl(GpiImplInterface *impl,
+                            GpiObjHdl *parent,
+                            void *hdl) : GpiPseudoObjHdl(impl, parent, hdl, GPI_GENARRAY) { }
+    virtual ~VpiPseudoGenArrayObjHdl() { }
+
+    int initialise(GpiObjHdlId &id);
+};
+
+class VpiPseudoArrayObjHdl : public GpiPseudoObjHdl {
+public:
+    VpiPseudoArrayObjHdl(GpiImplInterface *impl,
+                         GpiObjHdl *parent,
+                         void *hdl) : GpiPseudoObjHdl(impl, parent, hdl, GPI_ARRAY) { }
+    virtual ~VpiPseudoArrayObjHdl() { }
+
+    int initialise(GpiObjHdlId &id);
+};
+
 class VpiArrayObjHdl : public GpiObjHdl {
 public:
     VpiArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, vpiHandle hdl, gpi_objtype_t objtype) :
@@ -291,7 +311,8 @@ public:
     const char * reason_to_string(int reason);
 
 protected:
-    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl);
+    GpiObjHdl* create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype);
 
 private:
     /* Singleton callbacks */

@@ -34,6 +34,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <algorithm>
 
 typedef enum gpi_cb_state {
     GPI_FREE = 0,
@@ -102,13 +103,15 @@ public:
               GpiObjHdl *parent,
               void *hdl=NULL,
               gpi_objtype_t objtype=GPI_UNKNOWN,
-              bool is_const=false) :
+              bool is_const=false,
+              bool is_pseudo=false) :
                    GpiHdl(impl, hdl),
                    m_parent(parent),
                    m_num_elems(0),
                    m_indexable(false),
                    m_range_left(-1),
                    m_range_right(-1),
+                   m_pseudo(is_pseudo),
                    m_type(objtype),
                    m_const(is_const) { }
 
@@ -127,6 +130,8 @@ public:
     int get_range_left(void) { return m_range_left; }
     int get_range_right(void) { return m_range_right; }
     int get_indexable(void) { return m_indexable; }
+
+    bool is_pseudo(void) { return m_pseudo; }
 
     const std::string & get_name(void);
     const std::string & get_fullname(void);
@@ -152,8 +157,23 @@ protected:
     std::string    m_definition_name;
     std::string    m_definition_file;
 
+    bool           m_pseudo;
+
     gpi_objtype_t  m_type;
     bool           m_const;
+};
+
+class GpiPseudoObjHdl : public GpiObjHdl {
+public:
+    GpiPseudoObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) : GpiObjHdl(impl,
+                                                                                                             parent,
+                                                                                                             hdl,
+                                                                                                             objtype,
+                                                                                                             parent->get_const(),
+                                                                                                             true) { }
+    virtual ~GpiPseudoObjHdl() { }
+
+    virtual int initialise(GpiObjHdlId &id);
 };
 
 
@@ -261,7 +281,16 @@ public:
     }
 
 protected:
+    bool pseudo_region_exists(std::string &name) {
+        if (std::find(m_pseudo_regions.begin(), m_pseudo_regions.end(), name) != m_pseudo_regions.end())
+            return true;
+        else
+            return false;
+    }
+
+protected:
     GpiObjHdl *m_parent;
+    std::vector<std::string> m_pseudo_regions;
 };
 
 template <class Ti, class Tm> class GpiIteratorMapping {
@@ -317,8 +346,8 @@ public:
     virtual GpiObjHdl* native_check_create(void *raw_hdl, GpiObjHdl *parent) = 0;
     virtual GpiObjHdl *get_root_handle(const char *name) = 0;
     virtual GpiIterator *iterate_handle(GpiObjHdl *obj_hdl, gpi_iterator_sel_t type) = 0;
-    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname);
-    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, int32_t index);
+    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, bool pseudo = false);
+    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, int32_t index, bool pseudo = false);
 
     /* Callback related, these may (will) return the same handle */
     virtual GpiCbHdl *register_timed_callback(uint64_t time_ps) = 0;
@@ -331,7 +360,8 @@ public:
     virtual const char * reason_to_string(int reason) = 0;
 
 protected:
-    virtual GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name) = 0;
+    virtual GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl) = 0;
+    virtual GpiObjHdl* create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) = 0;
 
 private:
     std::string m_name;

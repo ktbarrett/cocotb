@@ -158,6 +158,26 @@ public:
     virtual ~VhpiReadwriteCbHdl() { }
 };
 
+class VhpiPseudoGenArrayObjHdl : public GpiPseudoObjHdl {
+public:
+    VhpiPseudoGenArrayObjHdl(GpiImplInterface *impl,
+                             GpiObjHdl *parent,
+                             void *hdl) : GpiPseudoObjHdl(impl, parent, hdl, GPI_GENARRAY) { }
+    virtual ~VhpiPseudoGenArrayObjHdl() { }
+
+    int initialise(GpiObjHdlId &id);
+};
+
+class VhpiPseudoArrayObjHdl : public GpiPseudoObjHdl {
+public:
+    VhpiPseudoArrayObjHdl(GpiImplInterface *impl,
+                          GpiObjHdl *parent,
+                          void *hdl) : GpiPseudoObjHdl(impl, parent, hdl, GPI_ARRAY) { }
+    virtual ~VhpiPseudoArrayObjHdl() { }
+
+    int initialise(GpiObjHdlId &id);
+};
+
 class VhpiArrayObjHdl : public GpiObjHdl {
 public:
     VhpiArrayObjHdl(GpiImplInterface *impl,
@@ -277,7 +297,8 @@ public:
     const char * format_to_string(int format);
 
 protected:
-    virtual GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl);
+    GpiObjHdl* create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype);
 
 private:
     VhpiReadwriteCbHdl m_read_write;

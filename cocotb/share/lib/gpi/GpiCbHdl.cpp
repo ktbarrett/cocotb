@@ -134,6 +134,13 @@ int GpiObjHdl::initialise(GpiObjHdlId &id)
     return 0;
 }
 
+int GpiPseudoObjHdl::initialise(GpiObjHdlId &id)
+{
+    m_indexable    = true;
+
+    return GpiObjHdl::initialise(id);
+}
+
 int GpiCbHdl::run_callback(void)
 {
     LOG_DEBUG("Generic run_callback");

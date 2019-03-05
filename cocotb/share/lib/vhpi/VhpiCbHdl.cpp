@@ -25,6 +25,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************************************************************/
 
+#include <cstdlib>
+
 #include "VhpiImpl.h"
 
 extern "C" void handle_vhpi_callback(const vhpiCbDataT *cb_data);
@@ -126,51 +128,43 @@ bool get_range(vhpiHandleT hdl, vhpiIntT dim, int *left, int *right) {
 
 }
 
+int VhpiPseudoGenArrayObjHdl::initialise(GpiObjHdlId &id) {
+    return GpiPseudoObjHdl::initialise(id);
+}
+
+int VhpiPseudoArrayObjHdl::initialise(GpiObjHdlId &id) {
+    vhpiIntT dim_idx   = 1;  // At least one index counting this one
+    GpiObjHdl *current = get_parent();
+
+    while (current->is_pseudo()) {
+        ++dim_idx;
+        current = current->get_parent();
+    }
+
+    vhpiHandleT handle = get_handle<vhpiHandleT>();
+
+    bool error = get_range(handle, dim_idx, &m_range_left, &m_range_right);
+
+    if (error) {
+        LOG_ERROR("Unable to obtain constraints for an indexable object %s.", id.fullname.c_str());
+        return -1;
+    }
+
+    if (m_range_left > m_range_right) {
+        m_num_elems = m_range_left - m_range_right + 1;
+    } else {
+        m_num_elems = m_range_right - m_range_left + 1;
+    }
+
+    return GpiPseudoObjHdl::initialise(id);
+}
+
 int VhpiArrayObjHdl::initialise(GpiObjHdlId &id) {
     vhpiHandleT handle = GpiObjHdl::get_handle<vhpiHandleT>();
 
     m_indexable = true;
 
-    vhpiHandleT type = vhpi_handle(vhpiBaseType, handle);
-
-    if (type == NULL) {
-        vhpiHandleT st_hdl = vhpi_handle(vhpiSubtype, handle);
-
-        if (st_hdl != NULL) {
-            type = vhpi_handle(vhpiBaseType, st_hdl);
-            vhpi_release_handle(st_hdl);
-        }
-    }
-
-    if (NULL == type) {
-        LOG_ERROR("Unable to get vhpiBaseType for %s", id.fullname.c_str());
-        return -1;
-    }
-
-    vhpiIntT num_dim = vhpi_get(vhpiNumDimensionsP, type);
-    vhpiIntT dim_idx = 0;
-
-    /* Need to determine which dimension constraint is needed */
-    if (num_dim > 1) {
-        std::string hdl_name = vhpi_get_str(vhpiCaseNameP, handle);
-
-        if (hdl_name.length() < id.name.length()) {
-            std::string pseudo_idx = id.name.substr(hdl_name.length());
-
-            while (pseudo_idx.length() > 0) {
-                std::size_t found = pseudo_idx.find_first_of(")");
-
-                if (found != std::string::npos) {
-                    ++dim_idx;
-                    pseudo_idx = pseudo_idx.substr(found+1);
-                } else {
-                    break;
-                }
-            }
-        }
-    }
-
-    bool error = get_range(handle, dim_idx, &m_range_left, &m_range_right);
+    bool error = get_range(handle, 0, &m_range_left, &m_range_right);
 
     if (error) {
         LOG_ERROR("Unable to obtain constraints for an indexable object %s.", id.fullname.c_str());
@@ -977,6 +971,10 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
     vhpiHandleT obj;
     GpiObjHdl *new_obj;
 
+    bool pseudo    = false;
+    bool use_index = false;
+    int32_t index;
+
     if (!selected)
         return GpiIterator::END;
 
@@ -993,33 +991,47 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
         if (m_iterator) {
             obj = vhpi_scan(m_iterator);
 
-            /* For GPI_GENARRAY, only allow the generate statements through that match the name
-             * of the generate block.
-             */
-            if (obj != NULL && obj_type == GPI_GENARRAY) {
-                if (vhpi_get(vhpiKindP, obj) == vhpiForGenerateK) {
-                    std::string rgn_name = vhpi_get_str(vhpiCaseNameP, obj);
-                    if (rgn_name.compare(0,parent_name.length(),parent_name) != 0) {
+            if (obj != NULL) {
+                /* For GPI_GENARRAY, only allow the generate statements through that match the name
+                 * of the generate block.
+                 */
+                if (obj_type == GPI_GENARRAY) {
+                    if (vhpi_get(vhpiKindP, obj) == vhpiForGenerateK) {
+                        std::string rgn_name = vhpi_get_str(vhpiCaseNameP, obj);
+                        if (rgn_name.compare(0,parent_name.length(),parent_name) != 0) {
+                            obj = NULL;
+                            continue;
+                        }
+                    } else {
                         obj = NULL;
                         continue;
                     }
-                } else {
-                    obj = NULL;
+                } else if ((*one2many                == vhpiInternalRegions) &&
+                           (vhpi_get(vhpiKindP, obj) == vhpiForGenerateK   )) {
+                    std::string rgn_name = vhpi_get_str(vhpiFullCaseNameP, obj);
+                    std::size_t found    = rgn_name.rfind(GEN_IDX_SEP_LHS);
+
+                    if (found != std::string::npos && found != 0) {
+                        std::string pseudo_region = rgn_name.substr(0,found);
+                        if (pseudo_region_exists(pseudo_region)) {
+                            LOG_DEBUG("Skipping - Pseudo-Region already exists for %s (%s)", vhpi_get_str(vhpiFullNameP, obj),
+                                                                                             vhpi_get_str(vhpiKindStrP, obj));
+                            obj=NULL;
+                            continue;
+                        }
+                    }
+                }
+
+                if ((vhpiProcessStmtK         == vhpi_get(vhpiKindP, obj) ||
+                     vhpiCondSigAssignStmtK   == vhpi_get(vhpiKindP, obj) ||
+                     vhpiSimpleSigAssignStmtK == vhpi_get(vhpiKindP, obj) ||
+                     vhpiSelectSigAssignStmtK == vhpi_get(vhpiKindP, obj))) {
+                    LOG_DEBUG("Skipping %s (%s)", vhpi_get_str(vhpiFullNameP, obj),
+                                                  vhpi_get_str(vhpiKindStrP, obj));
+                    obj=NULL;
                     continue;
                 }
-            }
 
-            if (obj != NULL && (vhpiProcessStmtK         == vhpi_get(vhpiKindP, obj) ||
-                                vhpiCondSigAssignStmtK   == vhpi_get(vhpiKindP, obj) ||
-                                vhpiSimpleSigAssignStmtK == vhpi_get(vhpiKindP, obj) ||
-                                vhpiSelectSigAssignStmtK == vhpi_get(vhpiKindP, obj))) {
-                LOG_DEBUG("Skipping %s (%s)", vhpi_get_str(vhpiFullNameP, obj),
-                                              vhpi_get_str(vhpiKindStrP, obj));
-                obj=NULL;
-                continue;
-            }
-
-            if (obj != NULL) {
                 LOG_DEBUG("Found an item %s", vhpi_get_str(vhpiFullNameP, obj));
                 break;
             } else {
@@ -1069,17 +1081,25 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
     /*
      * If the parent is not a generate loop, then watch for generate handles and create
      * the pseudo-region.
-     *
-     * NOTE: Taking advantage of the "caching" to only create one pseudo-region object.
-     *       Otherwise a list would be required and checked while iterating
      */
-    if (*one2many == vhpiInternalRegions && obj_type != GPI_GENARRAY && vhpi_get(vhpiKindP, obj) == vhpiForGenerateK) {
+    if (obj_type == GPI_GENARRAY || (*one2many == vhpiInternalRegions && vhpi_get(vhpiKindP, obj) == vhpiForGenerateK)) {
         std::string idx_str = c_name;
         std::size_t found = idx_str.rfind(GEN_IDX_SEP_LHS);
 
         if (found != std::string::npos && found != 0) {
-            name        = idx_str.substr(0,found);
-            obj         = m_parent->get_handle<vhpiHandleT>();
+            if (obj_type != GPI_GENARRAY) {
+                name        = idx_str.substr(0,found);
+                obj         = m_parent->get_handle<vhpiHandleT>();
+
+                std::string fullname = vhpi_get_str(vhpiFullCaseNameP, obj);
+                m_pseudo_regions.push_back(fullname.substr(0, fullname.length()-found));
+                pseudo = true;
+            } else {
+                use_index = true;
+                name      = c_name;
+                found    += std::string(GEN_IDX_SEP_LHS).length();
+                index     = strtol(name.substr(found).c_str(), NULL, 10);
+            }
         } else {
             LOG_WARN("Unhandled Generate Loop Format - %s", name.c_str());
             name = c_name;
@@ -1121,7 +1141,12 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
     } else {
         fq_name += "." + name;
     }
-    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name);
+
+    if (use_index)
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, index, pseudo);
+    else
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, pseudo);
+
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;

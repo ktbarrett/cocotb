@@ -220,9 +220,7 @@ bool is_enum_boolean(vhpiHandleT hdl) {
     return false;
 }
 
-GpiObjHdl *VhpiImpl::create_gpi_obj(GpiObjHdl *parent,
-                                    void *hdl,
-                                    std::string &name)
+GpiObjHdl *VhpiImpl::create_gpi_obj(GpiObjHdl *parent, void *hdl)
 {
     vhpiIntT type;
     vpiHandle new_hdl = static_cast<vhpiHandleT>(hdl);
@@ -233,6 +231,8 @@ GpiObjHdl *VhpiImpl::create_gpi_obj(GpiObjHdl *parent,
         LOG_DEBUG("vhpiVerilog returned from vhpi_get(vhpiType, ...)")
         return NULL;
     }
+
+    std::string name = vhpi_get_str(vhpiCaseNameP, new_hdl);
 
     /* We need to delve further here to determine how to later set
        the values of an object */
@@ -351,26 +351,7 @@ GpiObjHdl *VhpiImpl::create_gpi_obj(GpiObjHdl *parent,
         case vhpiIfGenerateK:
         case vhpiForGenerateK:
         case vhpiCompInstStmtK: {
-            std::string hdl_name = vhpi_get_str(vhpiCaseNameP, new_hdl);
-
-            if (base_type == vhpiRootInstK && hdl_name != name) {
-                vhpiHandleT arch = vhpi_handle(vhpiDesignUnit, new_hdl);
-
-                if (NULL != arch) {
-                    vhpiHandleT prim = vhpi_handle(vhpiPrimaryUnit, arch);
-
-                    if (NULL != prim) {
-                        hdl_name = vhpi_get_str(vhpiCaseNameP, prim);
-                    }
-                }
-            }
-
-            if (name != hdl_name) {
-                LOG_DEBUG("Found pseudo-region %s", name.c_str());
-                gpi_type = GPI_GENARRAY;
-            } else {
-                gpi_type = GPI_MODULE;
-            }
+            gpi_type = GPI_MODULE;
             break;
         }
 
@@ -406,6 +387,17 @@ out:
     return new_obj;
 }
 
+GpiObjHdl *VhpiImpl::create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) {
+    GpiObjHdl *new_obj = NULL;
+
+    if (objtype == GPI_GENARRAY)
+        new_obj = new VhpiPseudoGenArrayObjHdl(this, parent, hdl);
+    else if (objtype == GPI_ARRAY)
+        new_obj = new VhpiPseudoArrayObjHdl(this, parent, hdl);
+
+    return new_obj;
+}
+
 GpiObjHdl *VhpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
 {
     LOG_DEBUG("Trying to convert raw to VHPI handle");
@@ -427,7 +419,7 @@ GpiObjHdl *VhpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
         fq_name += "." + name;
     }
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, false);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -442,6 +434,8 @@ GpiObjHdl *VhpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
     vhpiHandleT vhpi_hdl  = parent->get_handle<vhpiHandleT>();
 
     vhpiHandleT new_hdl;
+    bool pseudo = false;
+
     std::string fq_name = parent->get_fullname();
     if (fq_name == ":") {
         fq_name += name;
@@ -483,6 +477,7 @@ GpiObjHdl *VhpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
                     if (rgn_name.compare(0,name.length(),name) == 0) {
                         new_hdl = vhpi_hdl;
                         vhpi_release_handle(iter);
+                        pseudo = true;
                         break;
                     }
                 }
@@ -505,9 +500,10 @@ GpiObjHdl *VhpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
         vhpi_release_handle(new_hdl);
 
         new_hdl = vhpi_hdl;
+        pseudo  = true;
     }
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, pseudo);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -524,6 +520,7 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
     std::string fq_name   = parent->get_fullname();
     vhpiHandleT new_hdl   = NULL;
     char buff[14]; // needs to be large enough to hold -2^31 to 2^31-1 in string form ('(''-'10+'')'\0')
+    bool pseudo = false;
 
     gpi_objtype_t obj_type = parent->get_type();
 
@@ -628,10 +625,11 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
 #ifdef IUS
                         vhpiIntT l_rng = vhpi_get(vhpiLeftBoundP, constraint);
                         vhpiIntT r_rng = vhpi_get(vhpiRightBoundP, constraint);
-                        if (l_rng == UNCONSTRAINED || r_rng == UNCONSTRAINED) {
+                        if (l_rng == UNCONSTRAINED || r_rng == UNCONSTRAINED)
 #else
-                        if (vhpi_get(vhpiIsUnconstrainedP, constraint)) {
+                        if (vhpi_get(vhpiIsUnconstrainedP, constraint))
 #endif
+                        {
                             /* Bail and try the sub-type handle */
                             vhpi_release_handle(it);
                             break;
@@ -685,6 +683,7 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
                         indices.pop_back();
                         constraints.pop_back();
                     }
+
                 } else {
                     LOG_ERROR("Unable to access all constraints for %s", parent->get_fullname_str());
                     return NULL;
@@ -692,6 +691,7 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
 
             } else {
                 new_hdl = vhpi_hdl;  // Set to the parent handle to create the pseudo-handle
+                pseudo  = true;
             }
         } else {
             int left  = parent->get_range_left();
@@ -738,7 +738,7 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
         return NULL;
     }
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, index);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, index, pseudo);
     if (new_obj == NULL) {
         vhpi_release_handle(new_hdl);
         LOG_DEBUG("Could not fetch object below entity (%s) at index (%d)",
@@ -815,7 +815,7 @@ GpiObjHdl *VhpiImpl::get_root_handle(const char* name)
 
     root_name = found;
 
-    return create_and_initialise_gpi_obj(NULL, dut, root_name, root_name);
+    return create_and_initialise_gpi_obj(NULL, dut, root_name, root_name, false);
 
 }
 

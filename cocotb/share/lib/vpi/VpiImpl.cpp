@@ -132,9 +132,7 @@ gpi_objtype_t to_gpi_objtype(int32_t vpitype)
     }
 }
 
-GpiObjHdl* VpiImpl::create_gpi_obj(GpiObjHdl *parent,
-                                   void *hdl,
-                                   std::string &name)
+GpiObjHdl* VpiImpl::create_gpi_obj(GpiObjHdl *parent, void *hdl)
 {
     int32_t type;
     vpiHandle new_hdl = static_cast<vpiHandle>(hdl);
@@ -185,17 +183,9 @@ GpiObjHdl* VpiImpl::create_gpi_obj(GpiObjHdl *parent,
         case vpiGate:
         case vpiPrimTerm:
         case vpiGenScope:
-        case vpiGenScopeArray: {
-            std::string hdl_name = vpi_get_str(vpiName, new_hdl);
-
-            if (hdl_name != name) {
-                LOG_DEBUG("Found pseudo-region (hdl_name=%s but name=%s)", hdl_name.c_str(), name.c_str());
-                new_obj = new VpiObjHdl(this, parent, new_hdl, GPI_GENARRAY);
-            } else {
-                new_obj = new VpiObjHdl(this, parent, new_hdl, to_gpi_objtype(type));
-            }
+        case vpiGenScopeArray:
+            new_obj = new VpiObjHdl(this, parent, new_hdl, to_gpi_objtype(type));
             break;
-        }
         default:
             /* We should only print a warning here if the type is really Verilog,
                It could be VHDL as some simulators allow querying of both languages
@@ -217,6 +207,17 @@ GpiObjHdl* VpiImpl::create_gpi_obj(GpiObjHdl *parent,
     return new_obj;
 }
 
+GpiObjHdl *VpiImpl::create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype) {
+    GpiObjHdl *new_obj = NULL;
+
+    if (objtype == GPI_GENARRAY)
+        new_obj = new VpiPseudoGenArrayObjHdl(this, parent, hdl);
+    else if (objtype == GPI_ARRAY)
+        new_obj = new VpiPseudoArrayObjHdl(this, parent, hdl);
+
+    return new_obj;
+}
+
 GpiObjHdl* VpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
 {
     LOG_DEBUG("Trying to convert raw to VPI handle");
@@ -232,7 +233,7 @@ GpiObjHdl* VpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
     std::string name = c_name;
     std::string fq_name = parent->get_fullname() + "." + name;
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, false);
     if (new_obj == NULL) {
         vpi_free_object(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -244,6 +245,7 @@ GpiObjHdl* VpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
 GpiObjHdl* VpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
 {
     vpiHandle new_hdl;
+    bool pseudo = false;
     std::string fq_name = parent->get_fullname() + "." + name;
     std::vector<char> writable(fq_name.begin(), fq_name.end());
     writable.push_back('\0');
@@ -268,10 +270,11 @@ GpiObjHdl* VpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
         vpi_free_object(new_hdl);
 
         new_hdl = parent->get_handle<vpiHandle>();
+        pseudo = true;
     }
 
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, pseudo);
     if (new_obj == NULL) {
         vpi_free_object(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -284,6 +287,7 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
 {
     vpiHandle vpi_hdl = parent->get_handle<vpiHandle>();
     vpiHandle new_hdl = NULL;
+    bool pseudo       = false;
 
     char buff[14]; // needs to be large enough to hold -2^31 to 2^31-1 in string form ('['+'-'10+']'+'\0')
 
@@ -328,9 +332,8 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             }
 
             /* Get the number of constraints to determine if the index will result in a pseudo-handle or should be found */
-            vpiHandle p_hdl = parent->get_handle<vpiHandle>();
-            vpiHandle it         = vpi_iterate(vpiRange, p_hdl);
-            int constraint_cnt   = 0;
+            vpiHandle it       = vpi_iterate(vpiRange, vpi_hdl);
+            int constraint_cnt = 0;
             if (it != NULL) {
                 while (vpi_scan(it) != NULL) {
                     ++constraint_cnt;
@@ -339,7 +342,7 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
                 constraint_cnt = 1;
             }
 
-            std::string act_hdl_name = vpi_get_str(vpiName, p_hdl);
+            std::string act_hdl_name = vpi_get_str(vpiName, vpi_hdl);
 
             /* Removing the act_hdl_name from the parent->get_name() will leave the psuedo-indices */
             if (act_hdl_name.length() < parent->get_name().length()) {
@@ -369,7 +372,8 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
 
             /* Create a pseudo-handle if not the last index into a multi-dimensional array */
             if (new_hdl == NULL && constraint_cnt > 1) {
-                new_hdl = p_hdl;
+                new_hdl = vpi_hdl;
+                pseudo  = true;
             }
         }
     } else {
@@ -388,7 +392,7 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
     std::string idx = buff;
     std::string name = parent->get_name()+idx;
     std::string fq_name = parent->get_fullname()+idx;
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, index);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, index, pseudo);
     if (new_obj == NULL) {
         vpi_free_object(new_hdl);
         LOG_DEBUG("Unable to fetch object below entity (%s) at index (%d)",
@@ -432,7 +436,7 @@ GpiObjHdl *VpiImpl::get_root_handle(const char* name)
 
     root_name = vpi_get_str(vpiFullName, root);
 
-    return create_and_initialise_gpi_obj(NULL, root, root_name, root_name);
+    return create_and_initialise_gpi_obj(NULL, root, root_name, root_name, false);
 
   error:
 

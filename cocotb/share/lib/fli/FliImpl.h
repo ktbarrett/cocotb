@@ -221,6 +221,17 @@ private:
     mtiVariableIdT m_hdl;
 };
 
+class FliPseudoGenArrayObjHdl : public GpiPseudoObjHdl {
+public:
+    FliPseudoGenArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiRegionIdT hdl) :
+                                GpiPseudoObjHdl(impl, parent, hdl, GPI_GENARRAY) { }
+    virtual ~FliPseudoGenArrayObjHdl() { }
+
+    int initialise(GpiObjHdlId &id) {
+        return GpiPseudoObjHdl::initialise(id);
+    }
+};
+
 class FliArrayObjHdl : public GpiObjHdl {
 public:
     FliArrayObjHdl(GpiImplInterface *impl, GpiObjHdl *parent, mtiSignalIdT hdl);
@@ -491,13 +502,14 @@ public:
     const char *reason_to_string(int reason);
 
 protected:
-    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl);
+    GpiObjHdl* create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype);
 
 private:
     gpi_objtype_t get_gpi_obj_type(mtiTypeIdT _typeid);
-    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiRegionIdT   hdl, std::string &name);
-    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiSignalIdT   hdl, std::string &name);
-    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiVariableIdT hdl, std::string &name);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiRegionIdT   hdl);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiSignalIdT   hdl);
+    GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiVariableIdT hdl);
 
 public:
     FliTimerCache cache;
