@@ -501,6 +501,9 @@ public:
     /* Method to provide strings from operation types */
     const char *reason_to_string(int reason);
 
+    std::string get_handle_name(GpiObjHdl *hdl);
+    std::string get_handle_fullname(GpiObjHdl *hdl);
+
 protected:
     GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl);
     GpiObjHdl* create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype);
@@ -510,6 +513,7 @@ private:
     GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiRegionIdT   hdl);
     GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiSignalIdT   hdl);
     GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, mtiVariableIdT hdl);
+    size_t get_handle_name_len(GpiObjHdl *hdl, bool full);
 
 public:
     FliTimerCache cache;

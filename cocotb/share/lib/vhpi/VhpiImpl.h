@@ -296,9 +296,17 @@ public:
     const char * reason_to_string(int reason);
     const char * format_to_string(int format);
 
+    std::string get_handle_name(GpiObjHdl *hdl);
+    std::string get_handle_fullname(GpiObjHdl *hdl);
+
 protected:
     GpiObjHdl* create_gpi_obj(GpiObjHdl *parent, void *hdl);
     GpiObjHdl* create_gpi_pseudo_obj(GpiObjHdl *parent, void *hdl, gpi_objtype_t objtype);
+
+private:
+    size_t get_handle_name_len(GpiObjHdl *hdl, bool full);
+    size_t get_handle_full_index_str_len(GpiObjHdl *hdl);
+    void insert_handle_full_index_str(GpiObjHdl *hdl, char *buff, size_t len);
 
 private:
     VhpiReadwriteCbHdl m_read_write;

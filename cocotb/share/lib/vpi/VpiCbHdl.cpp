@@ -755,11 +755,9 @@ GpiIterator::Status VpiSingleIterator::next_handle(std::string &name,
         return GpiIterator::NATIVE_NO_NAME;
     }
 
-    std::string fq_name = c_name;
+    LOG_DEBUG("vpi_scan found '%s", name.c_str());
 
-    LOG_DEBUG("vpi_scan found '%s = '%s'", name.c_str(), fq_name.c_str());
-
-    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, false);
+    new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, false);
     if (new_obj) {
         *hdl = new_obj;
         return GpiIterator::NATIVE;
@@ -909,40 +907,13 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     /* We try and create a handle internally, if this is not possible we
        return and GPI will try other implementations with the name
        */
-
-    std::string fq_name = m_parent->get_fullname();
-
-    if (obj_type == GPI_GENARRAY) {
-        std::size_t found = name.rfind("[");
-
-        if (found != std::string::npos) {
-            fq_name += name.substr(found);
-        } else {
-            LOG_WARN("Unhandled Sub-Element Format - %s", name.c_str());
-            fq_name += "." + name;
-        }
-    } else if (obj_type == GPI_STRUCTURE) {
-        std::size_t found = name.rfind(".");
-
-        if (found != std::string::npos) {
-            fq_name += name.substr(found);
-            name = name.substr(found+1);
-        } else {
-            LOG_WARN("Unhandled Sub-Element Format - %s", name.c_str());
-            fq_name += "." + name;
-        }
-    } else {
-        fq_name += "." + name;
-    }
-
-    LOG_DEBUG("vpi_scan found '%s'", fq_name.c_str());
-
     if (use_index)
-        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, index, pseudo);
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, index, pseudo);
     else
-        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, pseudo);
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, pseudo);
 
     if (new_obj) {
+        LOG_DEBUG("vpi_scan found '%s'", new_obj->get_fullname_str());
         *hdl = new_obj;
         return GpiIterator::NATIVE;
     }

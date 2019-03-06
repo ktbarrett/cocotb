@@ -219,43 +219,43 @@ GpiCbHdl *FliValueObjHdl::value_change_cb(unsigned int edge)
 
 const char* FliValueObjHdl::get_signal_value_binstr(void)
 {
-    LOG_ERROR("Getting signal/variable value as binstr not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Getting signal/variable value as binstr not supported for %s of type %d", m_fullname.c_str(), m_type);
     return NULL;
 }
 
 const char* FliValueObjHdl::get_signal_value_str(void)
 {
-    LOG_ERROR("Getting signal/variable value as str not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Getting signal/variable value as str not supported for %s of type %d", m_fullname.c_str(), m_type);
     return NULL;
 }
 
 double FliValueObjHdl::get_signal_value_real(void)
 {
-    LOG_ERROR("Getting signal/variable value as double not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Getting signal/variable value as double not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
 long FliValueObjHdl::get_signal_value_long(void)
 {
-    LOG_ERROR("Getting signal/variable value as long not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Getting signal/variable value as long not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
 int FliValueObjHdl::set_signal_value(const long value)
 {
-    LOG_ERROR("Setting signal/variable value via long not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Setting signal/variable value via long not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
 int FliValueObjHdl::set_signal_value(std::string &value)
 {
-    LOG_ERROR("Setting signal/variable value via string not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Setting signal/variable value via string not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
 int FliValueObjHdl::set_signal_value(const double value)
 {
-    LOG_ERROR("Setting signal/variable value via double not supported for %s of type %d", m_id.fullname.c_str(), m_type);
+    LOG_ERROR("Setting signal/variable value via double not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 

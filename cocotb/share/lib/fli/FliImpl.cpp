@@ -321,7 +321,6 @@ GpiObjHdl* FliImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
     LOG_DEBUG("Trying to convert a raw handle to an FLI Handle.");
 
     const char * c_name     = acc_fetch_name(raw_hdl);
-    const char * c_fullname = acc_fetch_fullname(raw_hdl);
 
     if (!c_name) {
         LOG_DEBUG("Unable to query the name of the raw handle.");
@@ -329,7 +328,6 @@ GpiObjHdl* FliImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
     }
 
     std::string name    = c_name;
-    std::string fq_name = c_fullname;
 
     FliHdl fli_hdl;
 
@@ -343,7 +341,7 @@ GpiObjHdl* FliImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
         return NULL;
     }
 
-    return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, false);
+    return create_and_initialise_gpi_obj(parent, &fli_hdl, name, false);
 }
 
 /**
@@ -357,21 +355,14 @@ GpiObjHdl*  FliImpl::native_check_create(std::string &name, GpiObjHdl *parent)
     bool search_sig       = false;
     bool search_var       = false;
 
-    std::string   fq_name  = parent->get_fullname();
+    std::string   fq_name  = GpiImplInterface::get_handle_fullname(parent, name);
     gpi_objtype_t obj_type = parent->get_type();
 
-    if (fq_name == "/") {
-        fq_name += name;
-        search_rgn = true;
-        search_sig = true;
-        search_var = true;
-    } else if (obj_type == GPI_MODULE) {
-        fq_name += "/" + name;
+    if (obj_type == GPI_MODULE) {
         search_rgn = true;
         search_sig = true;
         search_var = true;
     } else if (obj_type == GPI_STRUCTURE) {
-        fq_name += "." + name;
         search_rgn = false;
         search_var = fli_is_variable(parent->get_handle<void *>());
         search_sig = !search_var;
@@ -408,17 +399,17 @@ GpiObjHdl*  FliImpl::native_check_create(std::string &name, GpiObjHdl *parent)
         LOG_DEBUG("Found region %s -> %p", fq_name.c_str(), rgn);
 
         fli_hdl = FliHdl(rgn);
-        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, pseudo);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, pseudo);
     } else if (search_sig && (sig = mti_FindSignal(&writable[0])) != NULL) {
         LOG_DEBUG("Found a signal %s -> %p", fq_name.c_str(), sig);
 
         fli_hdl = FliHdl(sig);
-        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, false);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, false);
     } else if (search_var && (var = mti_FindVar(&writable[0])) != NULL) {
         LOG_DEBUG("Found a variable %s -> %p", fq_name.c_str(), var);
 
         fli_hdl = FliHdl(var);
-        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, false);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, false);
     } else if (search_rgn){
         /* If not found, check to see if the name of a generate loop and create a pseudo-region */
         for (rgn = mti_FirstLowerRegion(parent->get_handle<mtiRegionIdT>()); rgn != NULL; rgn = mti_NextRegion(rgn)) {
@@ -426,7 +417,7 @@ GpiObjHdl*  FliImpl::native_check_create(std::string &name, GpiObjHdl *parent)
                 std::string rgn_name = mti_GetRegionName(rgn);
                 if (rgn_name.compare(0,name.length(),name) == 0) {
                     fli_hdl = FliHdl(mti_HigherRegion(rgn));
-                    return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, true);
+                    return create_and_initialise_gpi_obj(parent, &fli_hdl, name, true);
                 }
             }
         }
@@ -445,7 +436,6 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
 {
     gpi_objtype_t obj_type = parent->get_type();
 
-    char buff[14];
     FliHdl fli_hdl;
 
     LOG_DEBUG("Looking for index %d from %s", index, parent->get_name_str());
@@ -453,11 +443,7 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
     if (obj_type == GPI_GENARRAY) {
         mtiRegionIdT rgn;
 
-        snprintf(buff, 14, "(%d)", index);
-
-        std::string idx = buff;
-        std::string name = parent->get_name() + idx;
-        std::string fq_name = parent->get_fullname() + idx;
+        std::string fq_name = GpiImplInterface::get_handle_fullname(parent, index);
 
         std::vector<char> writable(fq_name.begin(), fq_name.end());
         writable.push_back('\0');
@@ -470,7 +456,7 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
         }
 
         fli_hdl = FliHdl(rgn);
-        return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, index, false);
+        return create_and_initialise_gpi_obj(parent, &fli_hdl, index, false);
     } else if (obj_type == GPI_REGISTER || obj_type == GPI_ARRAY || obj_type == GPI_STRING) {
         if (!parent->get_indexable()) {
             LOG_DEBUG("Handle is not indexable");
@@ -492,12 +478,6 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             return NULL;
         }
 
-        snprintf(buff, 14, "(%d)", index);
-
-        std::string idx = buff;
-        std::string name = parent->get_name() + idx;
-        std::string fq_name = parent->get_fullname() + idx;
-
         void *parent_hdl = parent->get_handle<void *>();
 
         if (fli_is_variable(parent_hdl)) {
@@ -512,7 +492,7 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             mti_VsimFree(handles);
 
             fli_hdl = FliHdl(hdl);
-            return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, index, false);
+            return create_and_initialise_gpi_obj(parent, &fli_hdl, index, false);
         } else {
             mtiSignalIdT *handles = mti_GetSignalSubelements(static_cast<mtiSignalIdT>(parent_hdl), NULL);
             mtiSignalIdT hdl;
@@ -525,13 +505,112 @@ GpiObjHdl*  FliImpl::native_check_create(int32_t index, GpiObjHdl *parent)
             mti_VsimFree(handles);
 
             fli_hdl = FliHdl(hdl);
-            return create_and_initialise_gpi_obj(parent, &fli_hdl, name, fq_name, index, false);
+            return create_and_initialise_gpi_obj(parent, &fli_hdl, index, false);
         }
 
     } else {
         LOG_ERROR("FLI: Parent of type %d must be of type GPI_GENARRAY, GPI_REGISTER, GPI_ARRAY, or GPI_STRING to have an index.", obj_type);
         return NULL;
     }
+}
+
+size_t FliImpl::get_handle_name_len(GpiObjHdl *hdl, bool full)
+{
+    size_t len        = 0;
+    size_t concat_len = (full) ? 1 : 0;                    // Add one for concat char '/' or '.'
+    GpiObjHdl *current = hdl;
+
+    if (current == NULL) {
+        return 0;
+    }
+
+    do {
+        while (current->use_index()) {
+            len += current->get_id_index_str().length() + 2;  // Add 2 for the '(' and ')'
+            current = current->get_parent();
+        }
+
+        len += current->get_id_name().length();
+        len += concat_len;
+
+        current = current->get_parent();
+
+    } while (full && current != NULL);
+
+    return len;
+}
+
+std::string FliImpl::get_handle_name(GpiObjHdl *hdl)
+{
+    std::string name;
+
+    GpiObjHdl *current = hdl;
+    size_t len = get_handle_name_len(hdl, false);
+    size_t idx = len;
+    char *buff = new char[len+1];
+
+    buff[idx] = '\0';
+
+    while (current->use_index()) {
+        std::string index_str = current->get_id_index_str();
+
+        buff[--idx] = ')';
+        idx -= index_str.length();
+        index_str.copy(&buff[idx], std::string::npos);
+        buff[--idx] = '(';
+
+        current = current->get_parent();
+    }
+
+    current->get_id_name().copy(buff, std::string::npos);
+
+    name = buff;
+
+    delete buff;
+
+    return name;
+}
+
+std::string FliImpl::get_handle_fullname(GpiObjHdl *hdl)
+{
+    GpiObjHdl *current = hdl;
+
+    if (current == NULL) {
+        return "";
+    }
+
+    std::string name;
+    size_t len = get_handle_name_len(hdl, true);
+    size_t idx = len;
+    char *buff = new char[len+1];
+
+    buff[idx] = '\0';
+
+    do {
+        while (current->use_index()) {
+            std::string index_str = current->get_id_index_str();
+
+            buff[--idx] = ')';
+            idx -= index_str.length();
+            index_str.copy(&buff[idx], std::string::npos);
+            buff[--idx] = '(';
+
+            current = current->get_parent();
+        }
+
+        idx -= current->get_id_name().length();
+        current->get_id_name().copy(&buff[idx], std::string::npos);
+
+        current = current->get_parent();
+
+        buff[--idx] = ((current != NULL) && (current->get_type() == GPI_STRUCTURE)) ? '.' : '/';
+    } while (current != NULL);
+
+    name = buff;
+
+    delete buff;
+
+    return name;
 }
 
 const char *FliImpl::reason_to_string(int reason)
@@ -571,10 +650,7 @@ void FliImpl::get_sim_precision(int32_t *precision)
 GpiObjHdl *FliImpl::get_root_handle(const char *name)
 {
     mtiRegionIdT root;
-    char *rgn_name;
-    char *rgn_fullname;
     std::string root_name;
-    std::string root_fullname;
     FliHdl fli_hdl;
 
     for (root = mti_GetTopRegion(); root != NULL; root = mti_NextRegion(root)) {
@@ -587,17 +663,12 @@ GpiObjHdl *FliImpl::get_root_handle(const char *name)
         goto error;
     }
 
-    rgn_name     = mti_GetRegionName(root);
-    rgn_fullname = mti_GetRegionFullName(root);
-
-    root_name     = rgn_name;
-    root_fullname = rgn_fullname;
-    mti_VsimFree(rgn_fullname);
+    root_name = mti_GetRegionName(root);
 
     LOG_DEBUG("Found toplevel: %s, creating handle....", root_name.c_str());
 
     fli_hdl = FliHdl(root);
-    return create_and_initialise_gpi_obj(NULL, &fli_hdl, root_name, root_fullname, false);
+    return create_and_initialise_gpi_obj(NULL, &fli_hdl, root_name, false);
 
 error:
 
@@ -959,37 +1030,10 @@ GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl,
         mti_VsimFree(c_name);
     }
 
-    std::string fq_name = m_parent->get_fullname();
-    if (fq_name == "/") {
-        fq_name += name;
-    } else if (*one2many == FliIterator::OTM_SIGNAL_SUB_ELEMENTS ||
-               *one2many == FliIterator::OTM_VARIABLE_SUB_ELEMENTS ||
-                obj_type == GPI_GENARRAY) {
-        std::size_t found;
-
-        if (obj_type == GPI_STRUCTURE) {
-            found = name.find_last_of(".");
-        } else {
-            found = name.find_last_of("(");
-        }
-
-        if (found != std::string::npos) {
-            fq_name += name.substr(found);
-            if (obj_type != GPI_GENARRAY) {
-                name = name.substr(found+1);
-            }
-        } else {
-            LOG_WARN("Unhandled Sub-Element Format - %s", name.c_str());
-            fq_name += "/" + name;
-        }
-    } else {
-        fq_name += "/" + name;
-    }
-
     if (use_index)
-        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, pseudo);
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, index, pseudo);
     else
-        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, fq_name, index, pseudo);
+        new_obj = m_impl->create_and_initialise_gpi_obj(m_parent, obj, name, pseudo);
 
     if (new_obj) {
         *hdl = new_obj;

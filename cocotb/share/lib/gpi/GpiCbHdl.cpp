@@ -30,17 +30,17 @@
 
 const char * GpiObjHdl::get_name_str(void)
 {
-    return m_id.name.c_str();
+    return m_name.c_str();
 }
 
 const char * GpiObjHdl::get_fullname_str(void)
 {
-    return m_id.fullname.c_str();
+    return m_fullname.c_str();
 }
 
 const std::string & GpiObjHdl::get_fullname(void)
 {
-    return m_id.fullname;
+    return m_fullname;
 }
 
 const char * GpiObjHdl::get_type_str(void)
@@ -75,16 +75,21 @@ const char * GpiObjHdl::get_type_str(void)
 
 const std::string & GpiObjHdl::get_name(void)
 {
+    return m_name;
+}
+
+const std::string & GpiObjHdl::get_id_name(void)
+{
     return m_id.name;
 }
 
-const std::string & GpiObjHdl::get_index_str(void)
+const std::string & GpiObjHdl::get_id_index_str(void)
 {
     return m_id.index_str;
 }
 
 
-int32_t GpiObjHdl::get_index(void)
+int32_t GpiObjHdl::get_id_index(void)
 {
     return m_id.index;
 }
@@ -126,17 +131,17 @@ bool GpiHdl::is_this_impl(GpiImplInterface *impl)
 
 int GpiObjHdl::initialise(GpiObjHdlId &id)
 {
-    m_id.name      = id.name;
-    m_id.fullname  = id.fullname;
-    m_id.use_index = id.use_index;
-    m_id.index     = id.index;
-    m_id.index_str = id.index_str;
+    m_id = id;
+
+    m_name     = m_impl->get_handle_name(this);
+    m_fullname = m_impl->get_handle_fullname(this);
+
     return 0;
 }
 
 int GpiPseudoObjHdl::initialise(GpiObjHdlId &id)
 {
-    m_indexable    = true;
+    m_indexable = true;
 
     return GpiObjHdl::initialise(id);
 }

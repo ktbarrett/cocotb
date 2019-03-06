@@ -231,12 +231,11 @@ GpiObjHdl* VpiImpl::native_check_create(void *raw_hdl, GpiObjHdl *parent)
     }
 
     std::string name = c_name;
-    std::string fq_name = parent->get_fullname() + "." + name;
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, false);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, false);
     if (new_obj == NULL) {
         vpi_free_object(new_hdl);
-        LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
+        LOG_DEBUG("Unable to fetch object %s", name.c_str());
         return NULL;
     }
     return new_obj;
@@ -246,7 +245,8 @@ GpiObjHdl* VpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
 {
     vpiHandle new_hdl;
     bool pseudo = false;
-    std::string fq_name = parent->get_fullname() + "." + name;
+
+    std::string fq_name = GpiImplInterface::get_handle_fullname(parent, name);
     std::vector<char> writable(fq_name.begin(), fq_name.end());
     writable.push_back('\0');
 
@@ -274,7 +274,7 @@ GpiObjHdl* VpiImpl::native_check_create(std::string &name, GpiObjHdl *parent)
     }
 
 
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, pseudo);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, pseudo);
     if (new_obj == NULL) {
         vpi_free_object(new_hdl);
         LOG_DEBUG("Unable to fetch object %s", fq_name.c_str());
@@ -289,19 +289,14 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
     vpiHandle new_hdl = NULL;
     bool pseudo       = false;
 
-    char buff[14]; // needs to be large enough to hold -2^31 to 2^31-1 in string form ('['+'-'10+']'+'\0')
-
     gpi_objtype_t obj_type = parent->get_type();
 
     if (obj_type == GPI_GENARRAY) {
-        snprintf(buff, 14, "[%d]", index);
-
         LOG_DEBUG("Native check create for index %d of parent %s (pseudo-region)",
                   index,
                   parent->get_name_str());
 
-        std::string idx      = buff;
-        std::string hdl_name = parent->get_fullname() + idx;
+        std::string hdl_name = GpiImplInterface::get_handle_fullname(parent, index);
         std::vector<char> writable(hdl_name.begin(), hdl_name.end());
         writable.push_back('\0');
 
@@ -319,61 +314,47 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
          *    Questa only works when both indicies are provided, i.e. will need a pseudo-handle to behave like the first index.
          */
         if (new_hdl == NULL) {
-            int left       = parent->get_range_left();
-            int right      = parent->get_range_right();
-            bool ascending = (left < right);
-
             LOG_DEBUG("Unable to find handle through vpi_handle_by_index(), attempting second method");
 
-            if (( ascending && (index < left || index > right)) ||
-                (!ascending && (index > left || index < right))) {
-                LOG_ERROR("Invalid Index - Index %d is not in the range of [%d:%d]", index, left, right);
+            if (( parent->is_ascending() && (index < parent->get_range_left() || index > parent->get_range_right())) ||
+                (!parent->is_ascending() && (index > parent->get_range_left() || index < parent->get_range_right()))) {
+                LOG_ERROR("Invalid Index - Index %d is not in the range of [%d:%d]", index, parent->get_range_left(), parent->get_range_right());
                 return NULL;
             }
 
-            /* Get the number of constraints to determine if the index will result in a pseudo-handle or should be found */
-            vpiHandle it       = vpi_iterate(vpiRange, vpi_hdl);
-            int constraint_cnt = 0;
-            if (it != NULL) {
-                while (vpi_scan(it) != NULL) {
-                    ++constraint_cnt;
-                }
-            } else {
-                constraint_cnt = 1;
-            }
-
-            std::string act_hdl_name = vpi_get_str(vpiName, vpi_hdl);
-
-            /* Removing the act_hdl_name from the parent->get_name() will leave the psuedo-indices */
-            if (act_hdl_name.length() < parent->get_name().length()) {
-                std::string idx_str = parent->get_name().substr(act_hdl_name.length());
-
-                while (idx_str.length() > 0) {
-                    std::size_t found = idx_str.find_first_of("]");
-
-                    if (found != std::string::npos) {
-                        --constraint_cnt;
-                        idx_str = idx_str.substr(found+1);
-                    } else {
-                        break;
-                    }
-                }
-            }
-
-            snprintf(buff, 14, "[%d]", index);
-
-            std::string idx = buff;
-            std::string hdl_name = parent->get_fullname() + idx;
+            std::string hdl_name = GpiImplInterface::get_handle_fullname(parent, index);
 
             std::vector<char> writable(hdl_name.begin(), hdl_name.end());
             writable.push_back('\0');
 
             new_hdl = vpi_handle_by_name(&writable[0], NULL);
 
-            /* Create a pseudo-handle if not the last index into a multi-dimensional array */
-            if (new_hdl == NULL && constraint_cnt > 1) {
-                new_hdl = vpi_hdl;
-                pseudo  = true;
+            if (new_hdl == NULL) {
+                /* Get the number of constraints to determine if the index will result in a pseudo-handle or should be found */
+                vpiHandle it       = vpi_iterate(vpiRange, vpi_hdl);
+
+                int32_t  ndim = 0;
+
+                if (it != NULL) {
+                    while (vpi_scan(it) != NULL) {
+                        ++ndim;
+                    }
+                } else {
+                    ndim = 1;
+                }
+
+                GpiObjHdl *current = parent;
+
+                while (current->is_pseudo()) {
+                    --ndim;
+                    current = current->get_parent();
+                }
+
+                /* Create a pseudo-handle if not the last index into a multi-dimensional array */
+                if (ndim > 1) {
+                    new_hdl = vpi_hdl;
+                    pseudo  = true;
+                }
             }
         }
     } else {
@@ -387,12 +368,7 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
         return NULL;
     }
 
-    snprintf(buff, 14, "[%d]", index);
-
-    std::string idx = buff;
-    std::string name = parent->get_name()+idx;
-    std::string fq_name = parent->get_fullname()+idx;
-    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, name, fq_name, index, pseudo);
+    GpiObjHdl* new_obj = create_and_initialise_gpi_obj(parent, new_hdl, index, pseudo);
     if (new_obj == NULL) {
         vpi_free_object(new_hdl);
         LOG_DEBUG("Unable to fetch object below entity (%s) at index (%d)",
@@ -400,6 +376,106 @@ GpiObjHdl* VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent)
         return NULL;
     }
     return new_obj;
+}
+
+size_t VpiImpl::get_handle_name_len(GpiObjHdl *hdl, bool full)
+{
+    size_t len        = 0;
+    GpiObjHdl *current = hdl;
+
+    if (current == NULL) {
+        return 0;
+    }
+
+    do {
+        while (current->use_index()) {
+            len += current->get_id_index_str().length() + 2;  // Add 2 for the '[' and ']'
+            current = current->get_parent();
+        }
+
+        len += current->get_id_name().length();
+
+        current = current->get_parent();
+
+        if (full && current != NULL)
+            len += 1;                                         // Add one for concat char '.', root does not start with '.'
+    } while (full && current != NULL);
+
+    return len;
+}
+
+std::string VpiImpl::get_handle_name(GpiObjHdl *hdl)
+{
+    GpiObjHdl *current = hdl;
+
+    if (current == NULL) {
+        return "";
+    }
+
+    std::string name;
+    size_t len = get_handle_name_len(hdl, false);
+    size_t idx = len;
+    char *buff = new char[len+1];
+
+    buff[idx] = '\0';
+
+    while (current->use_index()) {
+        buff[--idx] = ']';
+        idx -= current->get_id_index_str().length();
+        current->get_id_index_str().copy(&buff[idx], std::string::npos);
+        buff[--idx] = '[';
+
+        current = current->get_parent();
+    }
+
+    current->get_id_name().copy(buff, std::string::npos);
+
+    name = buff;
+
+    delete buff;
+
+    return name;
+}
+
+std::string VpiImpl::get_handle_fullname(GpiObjHdl *hdl)
+{
+    GpiObjHdl *current = hdl;
+
+    if (current == NULL) {
+        return "";
+    }
+
+    std::string name;
+    size_t len = get_handle_name_len(hdl, true);
+    size_t idx = len;
+    char *buff = new char[len+1];
+
+    buff[idx] = '\0';
+
+    do {
+        while (current->use_index()) {
+            buff[--idx] = ']';
+            idx -= current->get_id_index_str().length();
+            current->get_id_index_str().copy(&buff[idx], std::string::npos);
+            buff[--idx] = '[';
+
+            current = current->get_parent();
+        }
+
+        idx -= current->get_id_name().length();
+        current->get_id_name().copy(&buff[idx], std::string::npos);
+
+        current = current->get_parent();
+
+        if (current != NULL)
+            buff[--idx] = '.';
+    } while (current != NULL);
+
+    name = buff;
+
+    delete buff;
+
+    return name;
 }
 
 GpiObjHdl *VpiImpl::get_root_handle(const char* name)
@@ -436,7 +512,7 @@ GpiObjHdl *VpiImpl::get_root_handle(const char* name)
 
     root_name = vpi_get_str(vpiFullName, root);
 
-    return create_and_initialise_gpi_obj(NULL, root, root_name, root_name, false);
+    return create_and_initialise_gpi_obj(NULL, root, root_name, false);
 
   error:
 

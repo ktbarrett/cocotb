@@ -46,7 +46,6 @@ typedef enum gpi_cb_state {
 
 typedef struct GpiObjHdlId_s {
     std::string name;
-    std::string fullname;
     bool use_index;
     int32_t index;
     std::string index_str;
@@ -127,16 +126,20 @@ public:
         LOG_DEBUG("%s has %d elements", m_id.name.c_str(), m_num_elems);
         return m_num_elems;
     }
+
+    bool is_ascending(void)  { return m_range_left < m_range_right; }
     int get_range_left(void) { return m_range_left; }
     int get_range_right(void) { return m_range_right; }
     int get_indexable(void) { return m_indexable; }
 
-    bool is_pseudo(void) { return m_pseudo; }
-
     const std::string & get_name(void);
     const std::string & get_fullname(void);
-    const std::string & get_index_str(void);
-    int32_t get_index(void);
+
+    bool is_pseudo(void) { return m_pseudo; }
+
+    const std::string & get_id_name(void);
+    const std::string & get_id_index_str(void);
+    int32_t get_id_index(void);
     bool use_index(void);
 
     virtual const char* get_definition_name() { return m_definition_name.c_str(); };
@@ -153,6 +156,8 @@ protected:
     bool           m_indexable;
     int            m_range_left;
     int            m_range_right;
+    std::string    m_name;
+    std::string    m_fullname;
 
     std::string    m_definition_name;
     std::string    m_definition_file;
@@ -346,8 +351,15 @@ public:
     virtual GpiObjHdl* native_check_create(void *raw_hdl, GpiObjHdl *parent) = 0;
     virtual GpiObjHdl *get_root_handle(const char *name) = 0;
     virtual GpiIterator *iterate_handle(GpiObjHdl *obj_hdl, gpi_iterator_sel_t type) = 0;
-    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, bool pseudo = false);
-    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, std::string &fullname, int32_t index, bool pseudo = false);
+    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, std::string &name, bool pseudo = false);
+    virtual GpiObjHdl* create_and_initialise_gpi_obj(GpiObjHdl *parent, void *hdl, int32_t index, bool pseudo = false);
+
+    virtual std::string get_handle_name(GpiObjHdl *hdl) = 0;
+    virtual std::string get_handle_fullname(GpiObjHdl *hdl) = 0;
+
+    virtual std::string get_handle_name(GpiObjHdl *hdl, int32_t index);
+    virtual std::string get_handle_fullname(GpiObjHdl *hdl, std::string &name);
+    virtual std::string get_handle_fullname(GpiObjHdl *hdl, int32_t index);
 
     /* Callback related, these may (will) return the same handle */
     virtual GpiCbHdl *register_timed_callback(uint64_t time_ps) = 0;
