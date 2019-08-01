@@ -1010,18 +1010,14 @@ void handle_fli_callback(void *data)
 
 static void register_initial_callback(void)
 {
-    FENTER
     sim_init_cb = new FliStartupCbHdl(fli_table);
     sim_init_cb->arm_callback();
-    FEXIT
 }
 
 static void register_final_callback(void)
 {
-    FENTER
     sim_finish_cb = new FliShutdownCbHdl(fli_table);
     sim_finish_cb->arm_callback();
-    FEXIT
 }
 
 static void register_embed(void)
