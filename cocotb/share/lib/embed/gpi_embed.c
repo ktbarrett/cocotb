@@ -389,5 +389,14 @@ void embed_sim_end(void)
 {
     FENTER
 
-    Py_Finalize();
+    if (pEventFn) {
+        PyGILState_STATE gstate;
+        to_python();
+        gstate = PyGILState_Ensure();
+
+        Py_Finalize();
+
+        PyGILState_Release(gstate);
+        to_simulator();
+    }
 }
