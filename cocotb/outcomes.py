@@ -26,8 +26,15 @@ class Outcome(_py_compat.abc_ABC):
         """ Send or throw this outcome into a generator """
 
     @abc.abstractmethod
-    def get(self, gen):
+    def get(self):
         """ Get the value of this outcome, or throw its exception """
+
+    @abc.abstractmethod
+    def __bool__(self):
+        """ Test if the outcome is a Value (True) or and Error (False) """
+
+    def __nonzero__(self):  # Python 2
+        return self.__bool__()
 
 
 class Value(Outcome):
@@ -40,6 +47,9 @@ class Value(Outcome):
     def get(self):
         return self.value
 
+    def __bool__(self):
+        return True
+
     def __repr__(self):
         return "Value({!r})".format(self.value)
 
@@ -47,6 +57,9 @@ class Value(Outcome):
 class _ErrorBase(Outcome):
     def __init__(self, error):
         self.error = error
+
+    def __bool__(self):
+        return False
 
     def __repr__(self):
         return "Error({!r})".format(self.error)
