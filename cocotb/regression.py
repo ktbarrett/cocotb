@@ -276,7 +276,7 @@ class RegressionManager(object):
         """
         test_init_outcome = cocotb.outcomes.capture(test_func, self._dut)
 
-        if isinstance(test_init_outcome, cocotb.outcomes.Error):
+        if not test_init_outcome:
             self.log.error("Failed to initialize test %s" % test_func.name, exc_info=True)
             self.xunit.add_testcase(name=test_func.name,
                                     classname=test_func.__module__,
