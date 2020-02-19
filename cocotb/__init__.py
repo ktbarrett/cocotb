@@ -132,6 +132,16 @@ def _initialise_testbench(root_name):
     """
     _rlock.acquire()
 
+    global simulator
+    import simulator
+
+    global SIM_NAME, SIM_VERSION
+    SIM_NAME = simulator.get_simulator_product()
+    SIM_VERSION = simulator.get_simulator_version()
+
+    cocotb.log.info("Running on {} version {}".format(SIM_NAME, SIM_VERSION))
+    cocotb.log.info("Python interpreter initialized and cocotb loaded!")
+
     memcheck_port = os.getenv('MEMCHECK')
     if memcheck_port is not None:
         mem_debug(int(memcheck_port))
