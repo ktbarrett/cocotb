@@ -222,7 +222,7 @@ int embed_sim_init(void *userdata, int argc, char const * const * argv)
     // initialize Python interpreter
     embed_init_python();
 
-    PyObject *cocotb_module, *cocotb_init, *cocotb_retval;
+    PyObject *cocotb_module, *cocotb_retval;
     PyObject *argv_list;
 
     cocotb_module = NULL;
@@ -232,18 +232,6 @@ int embed_sim_init(void *userdata, int argc, char const * const * argv)
     to_python();
 
     if (get_module_ref("cocotb", &cocotb_module)) {
-        goto cleanup;
-    }
-
-    cocotb_init = PyObject_GetAttrString(cocotb_module, "_initialise_testbench");   // New reference
-    if (cocotb_init == NULL) {
-        PyErr_Print();
-        LOG_ERROR("Failed to get the _initialise_testbench method");
-        goto cleanup;
-    }
-    if (!PyCallable_Check(cocotb_init)) {
-        LOG_ERROR("cocotb._initialise_testbench is not callable");
-        Py_DECREF(cocotb_init);
         goto cleanup;
     }
 
@@ -267,9 +255,8 @@ int embed_sim_init(void *userdata, int argc, char const * const * argv)
         PyList_SET_ITEM(argv_list, i, argv_item);                               // Note: This function steals the reference to argv_item
     }
 
-    cocotb_retval = PyObject_CallFunctionObjArgs(cocotb_init, argv_list, NULL);
+    cocotb_retval = PyObject_CallMethod(cocotb_module, "_entry_loader", "O", argv_list);
     Py_DECREF(argv_list);
-    Py_DECREF(cocotb_init);
 
     if (cocotb_retval != NULL) {
         LOG_DEBUG("_initialise_testbench successful");
