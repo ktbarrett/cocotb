@@ -232,7 +232,7 @@ int embed_sim_init(int argc, char const* const* argv)
         return ret;
 
     PyObject *cocotb_module, *cocotb_init, *cocotb_retval;
-    PyObject *cocotb_log_module = NULL;
+    PyObject *cocotb_gpi_module = NULL;
     PyObject *simlog_func;
     PyObject *argv_list;
 
@@ -246,12 +246,12 @@ int embed_sim_init(int argc, char const* const* argv)
         goto cleanup;
     }
 
-    if (get_module_ref("cocotb.log", &cocotb_log_module)) {
+    if (get_module_ref("cocotb._gpi_embed", &cocotb_gpi_module)) {
         goto cleanup;
     }
 
     // Obtain the function to use when logging from C code
-    simlog_func = PyObject_GetAttrString(cocotb_log_module, "_log_from_c");      // New reference
+    simlog_func = PyObject_GetAttrString(cocotb_gpi_module, "_log_from_c");      // New reference
     if (simlog_func == NULL) {
         PyErr_Print();
         LOG_ERROR("Failed to get the _log_from_c function");
@@ -261,7 +261,7 @@ int embed_sim_init(int argc, char const* const* argv)
     set_log_handler(simlog_func);                                       // Note: This function steals a reference to simlog_func.
 
     // Obtain the function to check whether to call log function
-    simlog_func = PyObject_GetAttrString(cocotb_log_module, "_filter_from_c");   // New reference
+    simlog_func = PyObject_GetAttrString(cocotb_gpi_module, "_filter_from_c");   // New reference
     if (simlog_func == NULL) {
         PyErr_Print();
         LOG_ERROR("Failed to get the _filter_from_c method");
@@ -324,7 +324,7 @@ cleanup:
     ret = -1;
 ok:
     Py_XDECREF(cocotb_module);
-    Py_XDECREF(cocotb_log_module);
+    Py_XDECREF(cocotb_gpi_module);
 
     PyGILState_Release(gstate);
     to_simulator();
