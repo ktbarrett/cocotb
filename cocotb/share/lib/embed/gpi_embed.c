@@ -231,12 +231,13 @@ int embed_sim_init(int argc, char const* const* argv)
     if (pEventFn)
         return ret;
 
-    PyObject *cocotb_module, *cocotb_init, *cocotb_retval;
+    PyObject *cocotb_module = NULL;
     PyObject *cocotb_gpi_module = NULL;
     PyObject *simlog_func;
-    PyObject *argv_list;
-
-    cocotb_module = NULL;
+    PyObject *entry_tuple = NULL;
+    PyObject *cocotb_init = NULL;
+    PyObject *argv_list = NULL;
+    PyObject *cocotb_retval = NULL;
 
     // Ensure that the current thread is ready to call the Python C API
     PyGILState_STATE gstate = PyGILState_Ensure();
@@ -266,7 +267,7 @@ int embed_sim_init(int argc, char const* const* argv)
 
     set_log_filter(simlog_func);                                        // Note: This function steals a reference to simlog_func.
 
-    PyObject* entry_tuple = PyObject_CallMethod(cocotb_gpi_module, "_load_entry", NULL);
+    entry_tuple = PyObject_CallMethod(cocotb_gpi_module, "_load_entry", NULL);
     if (entry_tuple == NULL) {
         PyErr_Print();
         LOG_ERROR("Unable to load entry point");
@@ -275,13 +276,11 @@ int embed_sim_init(int argc, char const* const* argv)
     if (!PyArg_ParseTuple(entry_tuple, "OOO", &cocotb_module, &cocotb_init, &pEventFn)) {
         PyErr_Print();
         LOG_ERROR("Bad output from cocotb._gpi_embed._load_entry: should return (entry module, entry function, sim event callback)");
-        Py_DECREF(entry_tuple);
         goto cleanup;
     }
     Py_INCREF(cocotb_module);
     Py_INCREF(cocotb_init);
-    Py_INCREF(pEventFn);
-    Py_DECREF(entry_tuple);
+    Py_INCREF(pEventFn);                                                // ParseTuple steals a reference, we need this to stick around...
 
     // Build argv for cocotb module
     argv_list = PyList_New(argc);                                       // New reference
@@ -297,19 +296,14 @@ int embed_sim_init(int argc, char const* const* argv)
         if (argv_item == NULL) {
             PyErr_Print();
             LOG_ERROR("Unable to convert command line argument %d to Unicode string.", i);
-            Py_DECREF(argv_list);
             goto cleanup;
         }
         PyList_SET_ITEM(argv_list, i, argv_item);                       // Note: This function steals the reference to argv_item
     }
 
     cocotb_retval = PyObject_CallFunctionObjArgs(cocotb_init, argv_list, NULL);
-    Py_DECREF(argv_list);
-    Py_DECREF(cocotb_init);
-
     if (cocotb_retval != NULL) {
         LOG_DEBUG("_initialise_testbench successful");
-        Py_DECREF(cocotb_retval);
     } else {
         PyErr_Print();
         LOG_ERROR("cocotb initialization failed - exiting");
@@ -324,6 +318,10 @@ cleanup:
 ok:
     Py_XDECREF(cocotb_module);
     Py_XDECREF(cocotb_gpi_module);
+    Py_XDECREF(entry_tuple);
+    Py_XDECREF(cocotb_init);
+    Py_XDECREF(argv_list);
+    Py_XDECREF(cocotb_retval);
 
     PyGILState_Release(gstate);
     to_simulator();
