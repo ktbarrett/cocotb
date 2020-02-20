@@ -14,6 +14,7 @@ Contents:
    coroutines
    triggers
    testbench_tools
+   python_entry_point
    library_reference
    library_reference_c
    endian_swapper
