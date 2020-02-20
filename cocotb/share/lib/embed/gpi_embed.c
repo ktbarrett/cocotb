@@ -231,41 +231,7 @@ int embed_sim_init(void *userdata, int argc, char const * const * argv)
     PyGILState_STATE gstate = PyGILState_Ensure();
     to_python();
 
-    if (get_module_ref("cocotb", &cocotb_module))
-        goto cleanup;
-
-    // Build argv for cocotb module
-    argv_list = PyList_New(argc);                                       // New reference
-    if (argv_list == NULL) {
-        PyErr_Print();
-        LOG_ERROR("Unable to create argv list");
-        goto cleanup;
-    }
-    for (i = 0; i < argc; i++) {
-        // Decode, embedding non-decodable bytes using PEP-383. This can only
-        // fail with MemoryError or similar.
-        PyObject *argv_item = PyUnicode_DecodeLocale(argv[i], "surrogateescape");  // New reference
-        if (argv_item == NULL) {
-            PyErr_Print();
-            LOG_ERROR("Unable to convert command line argument %d to Unicode string.", i);
-            Py_DECREF(argv_list);
-            goto cleanup;
-        }
-        PyList_SET_ITEM(argv_list, i, argv_item);                       // Note: This function steals the reference to argv_item
-    }
-
-    // Add argv list to cocotb module
-    if (-1 == PyModule_AddObject(cocotb_module, "argv", argv_list)) {   // Note: This function steals the reference to argv_list if successful
-        PyErr_Print();
-        LOG_ERROR("Unable to set argv");
-        Py_DECREF(argv_list);
-        goto cleanup;
-    }
-
-    // Add argc to cocotb module
-    if (-1 == PyModule_AddIntConstant(cocotb_module, "argc", argc)) {
-        PyErr_Print();
-        LOG_ERROR("Unable to set argc");
+    if (get_module_ref("cocotb", &cocotb_module)) {
         goto cleanup;
     }
 
@@ -281,7 +247,28 @@ int embed_sim_init(void *userdata, int argc, char const * const * argv)
         goto cleanup;
     }
 
-    cocotb_retval = PyObject_CallFunctionObjArgs(cocotb_init, NULL);
+    // Build argv for cocotb module
+    argv_list = PyList_New(argc);                                               // New reference
+    if (argv_list == NULL) {
+        PyErr_Print();
+        LOG_ERROR("Unable to create argv list");
+        goto cleanup;
+    }
+    for (i = 0; i < argc; i++) {
+        // Decode, embedding non-decodable bytes using PEP-383. This can only
+        // fail with MemoryError or similar.
+        PyObject *argv_item = PyUnicode_DecodeLocale(argv[i], "surrogateescape");  // New reference
+        if (argv_item == NULL) {
+            PyErr_Print();
+            LOG_ERROR("Unable to convert command line argument %d to Unicode string.", i);
+            Py_DECREF(argv_list);
+            goto cleanup;
+        }
+        PyList_SET_ITEM(argv_list, i, argv_item);                               // Note: This function steals the reference to argv_item
+    }
+
+    cocotb_retval = PyObject_CallFunctionObjArgs(cocotb_init, argv_list, NULL);
+    Py_DECREF(argv_list);
     Py_DECREF(cocotb_init);
 
     if (cocotb_retval != NULL) {
