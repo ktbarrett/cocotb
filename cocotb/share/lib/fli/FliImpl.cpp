@@ -1033,7 +1033,6 @@ static void register_embed()
 {
     fli_table = new FliImpl("FLI");
     gpi_register_impl(fli_table);
-    gpi_load_extra_libs();
 }
 
 
@@ -1041,6 +1040,7 @@ void cocotb_init()
 {
     LOG_INFO("cocotb_init called\n");
     register_embed();
+    gpi_load_extra_libs();
     register_initial_callback();
     register_final_callback();
 }
