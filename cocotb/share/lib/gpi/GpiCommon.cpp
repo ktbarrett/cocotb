@@ -210,8 +210,6 @@ void gpi_load_extra_libs()
         gpi_load_libs(to_load);
     }
 
-    /* Finally embed Python */
-    embed_init_python();
     gpi_print_registered_impl();
 }
 

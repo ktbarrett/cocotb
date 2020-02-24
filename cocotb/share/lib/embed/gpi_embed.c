@@ -224,6 +224,8 @@ int embed_sim_init(int argc, char const* const* argv)
 {
     FENTER
 
+    embed_init_python();
+
     int i;
     int ret = 0;
 
