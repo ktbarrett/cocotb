@@ -30,7 +30,6 @@
 #define COCOTB_GPI_PRIV_H_
 
 #include <gpi.h>
-#include <embed.h>
 #include <string>
 #include <vector>
 #include <map>
@@ -332,16 +331,5 @@ void gpi_cleanup();
 void gpi_embed_end();
 void gpi_embed_event(gpi_event_t level, const char *msg);
 void gpi_load_extra_libs();
-
-typedef void (*layer_entry_func)();
-
-/* Use this macro in an implementation layer to define an entry point */
-#define GPI_ENTRY_POINT(NAME, func) \
-    extern "C" { \
-        void NAME##_entry_point()  \
-        { \
-            func(); \
-        } \
-    }
 
 #endif /* COCOTB_GPI_PRIV_H_ */

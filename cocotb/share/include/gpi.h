@@ -88,6 +88,17 @@ typedef void * gpi_sim_hdl;
 // Define a handle type for iterators
 typedef void * gpi_iterator_hdl;
 
+typedef void (*layer_entry_func)(void);
+
+/* Use this macro in an implementation layer to define an entry point */
+#ifdef __cplusplus
+#define GPI_ENTRY_POINT(NAME, func) \
+    extern "C" void NAME##_entry_point() { func(); }
+#else
+#define GPI_ENTRY_POINT(NAME, func) \
+    void NAME##_entry_point(void) { func(); }
+#endif
+
 // Functions for controlling/querying the simulation state
 
 // Stop the simulator
@@ -95,6 +106,12 @@ void gpi_sim_end(void);
 
 // Cleanup GPI resources during sim shutdown
 void gpi_cleanup(void);
+
+// Register callback for simulator event
+void gpi_register_sim_event_callback(void (*callback)(void*, gpi_event_t, const char*), void* userdata);
+
+// Register callback for simulator end cleanup
+void gpi_register_sim_end_callback(void (*callback)(void*), void* userdata);
 
 // Returns simulation time as two uints. Units are default sim units
 void gpi_get_sim_time(uint32_t *high, uint32_t *low);

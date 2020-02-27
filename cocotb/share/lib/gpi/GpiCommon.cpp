@@ -27,16 +27,21 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************************************************************/
 
+#include "gpi.h"
 #include "gpi_priv.h"
 #include <cocotb_utils.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
 #include <map>
+#include <algorithm>        // std::find
+#include <utility>          // std::pair
 
 using namespace std;
 
 static vector<GpiImplInterface*> registered_impls;
+static std::vector<std::pair<void (*)(void*, gpi_event_t, const char *), void*>> sim_event_callbacks;
+static std::vector<std::pair<void (*)(void*), void*>> sim_end_callbacks;
 
 #ifdef SINGLETON_HANDLES
 
@@ -122,15 +127,54 @@ int gpi_register_impl(GpiImplInterface *func_tbl)
     return 0;
 }
 
+void gpi_register_sim_event_callback(void (*func)(void*, gpi_event_t, const char *), void* userdata)
+{
+    sim_event_callbacks.push_back(std::make_pair(func, userdata));
+}
+
+void gpi_register_sim_end_callback(void (*func)(void*), void* userdata)
+{
+    sim_end_callbacks.push_back(std::make_pair(func, userdata));
+}
+
+static std::pair<std::string, std::string> parse_library_string(const char* begin, const char* end);
+static std::vector<std::pair<std::string, std::string>> parse_library_list_string(const char* lib_list);
+template <typename Func>
+static bool load_libraries(const std::vector<std::pair<std::string, std::string>>& libraries, Func&& load);
+
 void gpi_embed_init(int argc, char const* const* argv)
 {
-    if (embed_sim_init(argc, argv))
+    // get GPI_USERS string
+    const char* envvar = getenv("GPI_USERS");
+
+    // parse GPI_USERS string
+    std::vector<std::pair<std::string, std::string>> libraries = parse_library_list_string(envvar);
+
+    // if no users, end immeidately
+    if (!libraries.size()) {
         gpi_embed_end();
+        return;
+    }
+
+    auto ok = load_libraries(libraries, [argc, argv](const char* lib_name, const char* func_name, void* func_raw) {
+        // call function
+        auto entry_point = reinterpret_cast<int (*)(int argc, char const* const*)>(func_raw);
+        int rc = entry_point(argc, argv);
+        // check error code
+        if (rc) {
+            LOG_ERROR("Function '%s' in shared library '%s' returned %d\n", func_name, lib_name, rc);
+        }
+        return rc == 0;
+    });
+
+    if (!ok) {
+        gpi_embed_end();
+    }
 }
 
 void gpi_embed_end()
 {
-    embed_sim_event(SIM_FAIL, "Simulator shutdown prematurely");
+    gpi_embed_event(SIM_FAIL, "Simulator shut down prematurely");
     gpi_cleanup();
 }
 
@@ -142,41 +186,19 @@ void gpi_sim_end()
 void gpi_cleanup(void)
 {
     CLEAR_STORE();
-    embed_sim_cleanup();
+    for (auto& p : sim_end_callbacks) {
+        auto func = p.first;
+        auto userdata = p.second;
+        (*func)(userdata);
+    }
 }
 
 void gpi_embed_event(gpi_event_t level, const char *msg)
 {
-    embed_sim_event(level, msg);
-}
-
-static void gpi_load_libs(std::vector<std::string> to_load)
-{
-#define DOT_LIB_EXT "." xstr(LIB_EXT)
-    std::vector<std::string>::iterator iter;
-
-    for (iter = to_load.begin();
-         iter != to_load.end();
-         iter++)
-    {
-        void *lib_handle = NULL;
-        std::string full_name = "lib" + *iter + DOT_LIB_EXT;
-        const char *now_loading = (full_name).c_str();
-
-        lib_handle = utils_dyn_open(now_loading);
-        if (!lib_handle) {
-            printf("cocotb: Error loading shared library %s\n", now_loading);
-            exit(1);
-        }
-        std::string sym = (*iter) + "_entry_point";
-        void *entry_point = utils_dyn_sym(lib_handle, sym.c_str());
-        if (!entry_point) {
-            printf("cocotb: Unable to find entry point %s for shared library %s\n", sym.c_str(), now_loading);
-            exit(1);
-        }
-
-        layer_entry_func new_lib_entry = (layer_entry_func)entry_point;
-        new_lib_entry();
+    for (auto& p : sim_event_callbacks) {
+        auto func = p.first;
+        auto userdata = p.second;
+        (*func)(userdata, level, msg);
     }
 }
 
@@ -185,24 +207,14 @@ void gpi_load_extra_libs()
     /* Lets look at what other libs we were asked to load too */
     char *lib_env = getenv("GPI_EXTRA");
 
-    if (lib_env) {
-        std::string lib_list = lib_env;
-        std::string delim = ":";
-        std::vector<std::string> to_load;
+    // parse GPI_USERS string
+    std::vector<std::pair<std::string, std::string>> libraries = parse_library_list_string(lib_env);
 
-        size_t e_pos = 0;
-        while (std::string::npos != (e_pos = lib_list.find(delim))) {
-            std::string lib = lib_list.substr(0, e_pos);
-            lib_list.erase(0, e_pos + delim.length());
-
-            to_load.push_back(lib);
-        }
-        if (lib_list.length()) {
-            to_load.push_back(lib_list);
-        }
-
-        gpi_load_libs(to_load);
-    }
+    load_libraries(libraries, [](const char*, const char*, void* entry_point_raw) {
+        auto entry_point = reinterpret_cast<void (*)(void)>(entry_point_raw);
+        entry_point();
+        return true;
+    });
 
     gpi_print_registered_impl();
 }
@@ -631,4 +643,72 @@ const char* GpiImplInterface::get_name_c() {
 
 const string& GpiImplInterface::get_name_s() {
     return m_name;
+}
+
+static std::pair<std::string, std::string> parse_library_string(const char* begin, const char* end)
+{
+#define DOT_LIB_EXT "." xstr(LIB_EXT)
+    auto it = std::find(begin, end, ':');
+    if (it == end) {
+        // no colon in the string, default
+        const std::string lib_name { "lib" + std::string(begin, end) + DOT_LIB_EXT };
+        const std::string func_name { std::string(begin, end) + "_entry_point" };
+        return {lib_name, func_name};
+    } else {
+        const std::string lib_name { "lib" + std::string(begin, it) + DOT_LIB_EXT };
+        const std::string func_name { it+1, end };
+        return {lib_name, func_name};
+    }
+#undef DOT_LIB_EXT
+}
+
+static std::vector<std::pair<std::string, std::string>> parse_library_list_string(const char* lib_list)
+{
+    if (!lib_list) {
+        return {};
+    }
+
+    std::vector<std::pair<std::string, std::string>> libraries;
+
+    const char* iter = lib_list;
+    const char* const end = lib_list + strlen(lib_list);
+    const char* tok;
+    while ((tok = std::find(iter, end, ',')) != end) {
+        libraries.push_back(parse_library_string(iter, tok));
+        iter = tok + 1;
+    }
+    if (iter != end) {
+        libraries.push_back(parse_library_string(iter, end));
+    }
+
+    return libraries;
+}
+
+template <typename Func>
+static bool load_libraries(const std::vector<std::pair<std::string, std::string>>& libraries, Func&& load)
+{
+    for (const auto& p : libraries) {
+        const std::string& lib_name = p.first;
+        const std::string& func_name = p.second;
+
+        // load library
+        void* lib_handle = utils_dyn_open(lib_name.c_str());
+        if (!lib_handle) {
+            LOG_ERROR("Error loading shared library '%s'\n", lib_name.c_str());
+            return false;
+        }
+
+        // get function
+        void* func_raw = utils_dyn_sym(lib_handle, func_name.c_str());
+        if (!func_raw) {
+            LOG_ERROR("Unable to find function '%s' in shared library '%s'\n", func_name.c_str(), lib_name.c_str());
+            return false;
+        }
+
+        if (!load(func_name.c_str(), lib_name.c_str(), func_raw)) {
+            return false;
+        }
+    }
+
+    return true;
 }

@@ -32,7 +32,7 @@
 #include <Python.h>
 #include <unistd.h>
 #include <cocotb_utils.h>
-#include "embed.h"
+#include "gpi.h"
 #include "locale.h"
 
 #if defined(_WIN32)
@@ -174,8 +174,10 @@ out:
  *
  * Cleans up reference counts for Python objects and calls Py_Finalize function.
  */
-void embed_sim_cleanup(void)
+void embed_sim_cleanup(void* userdata)
 {
+    (void)userdata;
+
     // If initialization fails, this may be called twice:
     // Before the initial callback returns and in the final callback.
     // So we check if Python is still initialized before doing cleanup.
@@ -220,9 +222,14 @@ int get_module_ref(const char *modname, PyObject **mod)
 }
 
 
+static void embed_sim_event(void*, gpi_event_t, const char*);
+
 int embed_sim_init(int argc, char const* const* argv)
 {
     FENTER
+
+    gpi_register_sim_event_callback(embed_sim_event, NULL);
+    gpi_register_sim_end_callback(embed_sim_cleanup, NULL);
 
     embed_init_python();
 
@@ -331,10 +338,13 @@ ok:
     return ret;
 }
 
-void embed_sim_event(gpi_event_t level, const char *msg)
+void embed_sim_event(void* userdata, gpi_event_t level, const char *msg)
 {
     FENTER
     /* Indicate to the upper layer a sim event occurred */
+
+    (void)userdata;
+    (void)msg;
 
     if (pEventFn) {
         PyGILState_STATE gstate;

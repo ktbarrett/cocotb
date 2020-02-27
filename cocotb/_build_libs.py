@@ -209,7 +209,7 @@ def _get_common_lib_ext(include_dir, share_lib_dir, sim_define):
         os.path.join("cocotb", "libs", sim_define.lower(), "libcocotb"),
         define_macros=[("PYTHON_SO_LIB", _get_python_lib())],
         include_dirs=[include_dir],
-        libraries=[_get_python_lib_link(), "gpilog", "cocotbutils"],
+        libraries=[_get_python_lib_link(), "gpi", "gpilog", "cocotbutils"],
         library_dirs=python_lib_dirs,
         sources=[os.path.join(share_lib_dir, "embed", "gpi_embed.c")],
         extra_link_args=_extra_link_args("libcocotb"),
@@ -223,7 +223,7 @@ def _get_common_lib_ext(include_dir, share_lib_dir, sim_define):
         os.path.join("cocotb", "libs", sim_define.lower(), "libgpi"),
         define_macros=[("LIB_EXT", _get_lib_ext_name()), ("SINGLETON_HANDLES", "")],
         include_dirs=[include_dir],
-        libraries=["cocotbutils", "gpilog", "cocotb", "stdc++"],
+        libraries=["cocotbutils", "gpilog", "stdc++"],
         sources=[
             os.path.join(share_lib_dir, "gpi", "GpiCbHdl.cpp"),
             os.path.join(share_lib_dir, "gpi", "GpiCommon.cpp"),
@@ -244,7 +244,7 @@ def _get_common_lib_ext(include_dir, share_lib_dir, sim_define):
         extra_compile_args=_extra_cc_compile_args,
     )
 
-    return [libcocotbutils, libgpilog, libcocotb, libgpi, libsim]
+    return [libcocotbutils, libgpilog, libgpi, libcocotb, libsim]
 
 
 def _get_vpi_lib_ext(
