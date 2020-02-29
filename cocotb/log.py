@@ -78,7 +78,6 @@ def default_config():
     else:
         hdlr.setFormatter(SimLogFormatter())
 
-
     logging.setLoggerClass(SimBaseLog)  # For backwards compatibility
     logging.basicConfig()
     logging.getLogger().handlers = [hdlr]  # overwrite default handlers
@@ -93,11 +92,9 @@ def default_config():
         _default_log = logging.INFO
     log.setLevel(_default_log)
 
-    # Notify GPI of log level, which it uses as an optimization to avoid
-    # calling into Python.
     if "COCOTB_SIM" in os.environ:
         import simulator
-        simulator.log_level(_default_log)
+        simulator.set_log_handler(_log_from_c)
 
 
 class SimBaseLog(logging.getLoggerClass()):
@@ -241,10 +238,6 @@ class SimColourLogFormatter(SimLogFormatter):
                  record.levelname.ljust(_LEVEL_CHARS))
 
         return self._format(level, record, msg, coloured=True)
-
-
-def _filter_from_c(logger_name, level):
-    return logging.getLogger(logger_name).isEnabledFor(level)
 
 
 def _log_from_c(logger_name, level, filename, lineno, msg, function_name):

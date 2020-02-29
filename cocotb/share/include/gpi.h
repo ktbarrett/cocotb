@@ -56,8 +56,7 @@ we have to create a process with the signal on the sensitivity list to imitate a
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
-
-#include <gpi_logging.h>
+#include <stdarg.h>
 
 #ifdef __cplusplus
 # define EXTERN_C_START extern "C" {
@@ -75,6 +74,113 @@ we have to create a process with the signal on the sensitivity list to imitate a
 
 
 EXTERN_C_START
+
+/**
+ * Named log levels.
+ * Log levels can be any value, but only these values will be named when using the native logger.
+ */
+enum gpi_log_levels {
+    GPIDebug = 10,
+    GPIInfo = 20,
+    GPIWarning = 30,
+    GPIError = 40,
+    GPICritical = 50
+};
+
+/**
+ * Convenience functions for logging, see #gpi_log for more detail.
+ */
+#define LOG_DEBUG(...)     gpi_log("cocotb.gpi", GPIDebug,         __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_INFO(...)      gpi_log("cocotb.gpi", GPIInfo,          __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_WARN(...)      gpi_log("cocotb.gpi", GPIWarning,       __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_ERROR(...)     gpi_log("cocotb.gpi", GPIError,         __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_CRITICAL(...)  do { \
+    gpi_log("cocotb.gpi", GPICritical,      __FILE__, __func__, __LINE__, __VA_ARGS__); \
+    exit(1); \
+} while (0)
+
+/**
+ * A GPI logging handler function.
+ * See #gpi_log for other params.
+ *
+ * @param[in] userdata  State data used by the logging handler
+ */
+typedef void (gpi_log_handler_type)(
+    void *userdata,
+    const char *name,
+    int level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    va_list args);
+
+/**
+ * Log a message.
+ * If a user log handler object is set, uses the registered log handler, otherwise uses the native logger.
+ * @param[in] name      Name of the logger
+ * @param[in] level     Level at which to log a message at
+ * @param[in] pathname  Name of the file where the call site is located
+ * @param[in] funcname  Name of the function where the call site is located
+ * @param[in] lineno    Line number of the call site
+ * @param[in] msg       The message to log
+ * @param[in] ...       Additional arguments; interpretation depends on the handler
+ */
+void gpi_log(const char *name, int level, const char *pathname, const char *funcname, long lineno, const char *msg, ...);
+
+/**
+ * Retrieve current custom log handler.
+ * @param[out] handler  Custom log handler registered previously, or NULL if no handler was set
+ * @param[out] userdata Custom log handler userdata registered previously, or NULL if no handler was set
+ */
+void gpi_get_log_handler(gpi_log_handler_type **handler, void **userdata);
+
+/**
+ * Set custom log handler.
+ * @param[in] handler   Handler function to call when the GPI logs a message
+ * @param[in] userdata  State data to pass to the handler function when logging a message
+ */
+void gpi_set_log_handler(gpi_log_handler_type *handler, void *userdata);
+
+/**
+ * Clear current custom log handler and use native logger
+ */
+void gpi_clear_log_handler(void);
+
+/**
+ * Builtin logger implementation, used as a fallback when no custom log handler is set.
+ * See #gpi_log for details on parameters.
+ */
+void gpi_native_logger_log(
+    const char *name,
+    int level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    ...);
+
+/**
+ * Builtin logger implementation, used as a fallback when no custom log handler is set.
+ * See #gpi_log for details on parameters. This version takes a va_list instead of varargs.
+ */
+void gpi_native_logger_log_v(
+    const char *name,
+    int level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    va_list argp);
+
+/**
+ * Set minimum logging level of the builtin logger implementation.
+ * If a logging request occurs where the logging level is lower than the level set by this function, it is not logged.
+ * *Only* affects the native logger.
+ * @param[in] level     Logging level
+ * @return              Previous logging level
+ */
+int gpi_native_logger_set_level(int level);
 
 typedef enum gpi_event_e {
     SIM_INFO = 0,

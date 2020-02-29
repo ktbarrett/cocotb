@@ -36,7 +36,6 @@
 
 #include <Python.h>
 #include "gpi.h"
-#include "gpi_logging.h"
 #include <cocotb_utils.h>     // COCOTB_UNUSED
 
 static int takes = 0;
@@ -217,23 +216,6 @@ err:
         gpi_cleanup();
     }
     return ret;
-}
-
-static PyObject *log_msg(PyObject *self, PyObject *args)
-{
-    COCOTB_UNUSED(self);
-    const char *name;
-    const char *path;
-    const char *msg;
-    const char *funcname;
-    int lineno;
-
-    if (!PyArg_ParseTuple(args, "sssis", &name, &path, &funcname, &lineno, &msg))
-        return NULL;
-
-    gpi_log(name, GPIInfo, path, funcname, lineno, msg);
-
-    Py_RETURN_NONE;
 }
 
 
@@ -977,20 +959,6 @@ static PyObject *deregister_callback(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-static PyObject *log_level(PyObject *self, PyObject *args)
-{
-    COCOTB_UNUSED(self);
-    enum gpi_log_levels new_level;
-    PyObject *py_level;
-
-    py_level = PyTuple_GetItem(args, 0);
-    new_level = (enum gpi_log_levels)PyLong_AsLong(py_level);
-
-    set_log_level(new_level);
-
-    Py_RETURN_NONE;
-}
-
 static void add_module_constants(PyObject* simulator)
 {
     // Make the GPI constants accessible from the C world
@@ -1042,6 +1010,165 @@ static PyObject *get_simulator_version(PyObject *m, PyObject *args)
     return result;
 }
 
+static PyObject *log_msg_native(PyObject *self, PyObject *args)
+{
+    COCOTB_UNUSED(self);
+    const char *name;
+    int level;
+    const char *path;
+    const char *funcname;
+    int lineno;
+    const char *msg;
+
+    if (!PyArg_ParseTuple(args, "sissis", &name, &level, &path, &funcname, &lineno, &msg))
+        return NULL;
+
+    gpi_native_logger_log(name, level, path, funcname, lineno, msg);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *set_log_level_native(PyObject *self, PyObject *args)
+{
+    COCOTB_UNUSED(self);
+    int new_level;
+
+    if (!PyArg_ParseTuple(args, "i", &new_level))
+        return NULL;
+
+    int old_level = gpi_native_logger_set_level(new_level);
+
+    return Py_BuildValue("i", old_level);
+}
+
+static PyObject *log_msg(PyObject *self, PyObject *args)
+{
+    COCOTB_UNUSED(self);
+    const char *name;
+    int level;
+    const char *path;
+    const char *funcname;
+    int lineno;
+    const char *msg;
+
+    if (!PyArg_ParseTuple(args, "sissis", &name, &level, &path, &funcname, &lineno, &msg))
+        return NULL;
+
+    gpi_log(name, level, path, funcname, lineno, msg);
+
+    Py_RETURN_NONE;
+}
+
+/**
+ * @name    GPI logging
+ * @brief   Write a log message using cocotb SimLog class
+ * @ingroup python_c_api
+ *
+ * GILState before calling: Unknown
+ *
+ * GILState after calling: Unknown
+ *
+ * Makes one call to PyGILState_Ensure and one call to PyGILState_Release
+ *
+ * If the Python logging mechanism is not initialised, dumps to `stderr`.
+ *
+ */
+static void cocotb_logger(void* python_log_func, const char *name, int level, const char *pathname, const char *funcname, long lineno, const char *msg, va_list argp)
+{
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    // Declared here in order to be initialized before any goto statements and refcount cleanup
+    PyObject *logger_name_arg = NULL, *filename_arg = NULL, *lineno_arg = NULL, *msg_arg = NULL, *function_arg = NULL;
+
+    PyObject *level_arg = PyLong_FromLong(level);                               // New reference
+    if (level_arg == NULL) {
+        goto error;
+    }
+
+    logger_name_arg = PyUnicode_FromString(name);                               // New reference
+    if (logger_name_arg == NULL) {
+        goto error;
+    }
+
+    filename_arg = PyUnicode_FromString(pathname);                              // New reference
+    if (filename_arg == NULL) {
+        goto error;
+    }
+
+    lineno_arg = PyLong_FromLong(lineno);                                       // New reference
+    if (lineno_arg == NULL) {
+        goto error;
+    }
+
+    #ifndef GPI_LOG_SIZE
+    #define GPI_LOG_SIZE 512
+    #endif
+    static char log_buff[GPI_LOG_SIZE];
+    int n = vsnprintf(log_buff, GPI_LOG_SIZE, msg, argp);
+    if (n < 0 || n >= GPI_LOG_SIZE) {
+        fprintf(stderr, "Log message construction failed\n");
+    }
+
+    msg_arg = PyUnicode_FromString(log_buff);                                   // New reference
+    if (msg_arg == NULL) {
+        goto error;
+    }
+
+    function_arg = PyUnicode_FromString(funcname);                              // New reference
+    if (function_arg == NULL) {
+        goto error;
+    }
+
+    // Log function args are logger_name, level, filename, lineno, msg, function
+    PyObject *handler_ret = PyObject_CallFunctionObjArgs(python_log_func, logger_name_arg, level_arg, filename_arg, lineno_arg, msg_arg, function_arg, NULL);
+    if (handler_ret == NULL) {
+        goto error;
+    }
+    Py_DECREF(handler_ret);
+
+    goto ok;
+error:
+    /* Note: don't call the LOG_ERROR macro because that might recurse */
+    gpi_native_logger_log_v(name, level, pathname, funcname, lineno, msg, argp);
+    gpi_native_logger_log("cocotb.gpi", GPIError, __FILE__, __func__, __LINE__, "Error calling Python logging function from C while logging the above");
+    PyErr_Print();
+ok:
+    Py_XDECREF(logger_name_arg);
+    Py_XDECREF(level_arg);
+    Py_XDECREF(filename_arg);
+    Py_XDECREF(lineno_arg);
+    Py_XDECREF(msg_arg);
+    Py_XDECREF(function_arg);
+    PyGILState_Release(gstate);
+}
+
+static PyObject *python_log_func = NULL;
+
+static PyObject *set_log_handler(PyObject *self, PyObject *args)
+{
+    COCOTB_UNUSED(self);
+
+    if (!PyArg_ParseTuple(args, "O", &python_log_func))
+        return NULL;
+    Py_INCREF(python_log_func);
+
+    gpi_set_log_handler(cocotb_logger, python_log_func);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *clear_log_handler(PyObject *self, PyObject *args)
+{
+    COCOTB_UNUSED(self);
+    COCOTB_UNUSED(args);
+
+    gpi_clear_log_handler();
+    Py_DECREF(python_log_func);
+
+    Py_RETURN_NONE;
+}
+
 static int simulator_traverse(PyObject *m, visitproc visit, void *arg) {
     Py_VISIT(GETSTATE(m)->error);
     return 0;
@@ -1053,7 +1180,6 @@ static int simulator_clear(PyObject *m) {
 }
 
 static PyMethodDef SimulatorMethods[] = {
-    {"log_msg", log_msg, METH_VARARGS, "Log a message"},
     {"get_signal_val_long", get_signal_val_long, METH_VARARGS, "Get the value of a signal as a long"},
     {"get_signal_val_str", get_signal_val_str, METH_VARARGS, "Get the value of a signal as an ASCII string"},
     {"get_signal_val_binstr", get_signal_val_binstr, METH_VARARGS, "Get the value of a signal as a binary string"},
@@ -1081,13 +1207,17 @@ static PyMethodDef SimulatorMethods[] = {
     {"stop_simulator", stop_simulator, METH_VARARGS, "Instruct the attached simulator to stop"},
     {"iterate", iterate, METH_VARARGS, "Get an iterator handle to loop over all members in an object"},
     {"next", next, METH_VARARGS, "Get the next object from the iterator"},
-    {"log_level", log_level, METH_VARARGS, "Set the log level for GPI"},
     {"get_sim_time", get_sim_time, METH_VARARGS, "Get the current simulation time as an int tuple"},
     {"get_precision", get_precision, METH_VARARGS, "Get the precision of the simulator"},
     {"deregister_callback", deregister_callback, METH_VARARGS, "De-register a callback"},
     {"error_out", error_out, METH_NOARGS, NULL},
     {"get_simulator_product", get_simulator_product, METH_NOARGS, "Simulator product information"},
     {"get_simulator_version", get_simulator_version, METH_NOARGS, "Simulator product version information"},
+    {"log_msg_native", log_msg_native, METH_VARARGS, "Log a message using the native GPI logger"},
+    {"set_log_level_native", set_log_level_native, METH_VARARGS, "Set the log level of the native GPI logger"},
+    {"log_msg", log_msg, METH_VARARGS, "Log a message using the current GPI logger"},
+    {"set_log_handler", set_log_handler, METH_VARARGS, "Set a custom GPI log handler"},
+    {"clear_log_handler", clear_log_handler, METH_NOARGS, "Reset the GPI log handler back to the native logger"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

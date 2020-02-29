@@ -634,3 +634,130 @@ const char* GpiImplInterface::get_name_c() {
 const string& GpiImplInterface::get_name_s() {
     return m_name;
 }
+
+struct _log_level_table {
+    long level;
+    const char *levelname;
+};
+
+static struct _log_level_table log_level_table [] = {
+    { 10,       "DEBUG"         },
+    { 20,       "INFO"          },
+    { 30,       "WARNING"       },
+    { 40,       "ERROR"         },
+    { 50,       "CRITICAL"      },
+    { 0,        NULL}
+};
+
+static int native_logger_level = GPIInfo;
+
+static const char *log_level(long level)
+{
+    struct _log_level_table *p;
+    const char *str = "------";
+
+    for (p=log_level_table; p->levelname; p++) {
+        if (level == p->level) {
+          str = p->levelname;
+          break;
+        }
+    }
+    return str;
+}
+
+void gpi_native_logger_log_v(
+    const char *name,
+    int level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    va_list argp)
+{
+    if (level < native_logger_level) {
+        return;
+    }
+
+    #ifndef GPI_LOG_SIZE
+    #define GPI_LOG_SIZE 512
+    #endif
+    static char log_buff[GPI_LOG_SIZE];
+
+    int n = vsnprintf(log_buff, GPI_LOG_SIZE, msg, argp);
+
+    if (n < 0 || n >= GPI_LOG_SIZE) {
+        fprintf(stderr, "Log message construction failed\n");
+    }
+
+    fprintf(stdout, "     -.--ns ");
+    fprintf(stdout, "%-9s", log_level(level));
+    fprintf(stdout, "%-35s", name);
+
+    size_t pathlen = strlen(pathname);
+    if (pathlen > 20) {
+        fprintf(stdout, "..%18s:", (pathname + (pathlen - 18)));
+    } else {
+        fprintf(stdout, "%20s:", pathname);
+    }
+
+    fprintf(stdout, "%-4ld", lineno);
+    fprintf(stdout, " in %-31s ", funcname);
+    fprintf(stdout, "%s", log_buff);
+    fprintf(stdout, "\n");
+    fflush(stdout);
+}
+
+int gpi_native_logger_set_level(int level)
+{
+    int old_level = native_logger_level;
+    native_logger_level = level;
+    return old_level;
+}
+
+void gpi_native_logger_log(
+    const char *name,
+    int level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    ...)
+{
+    va_list argp;
+    va_start(argp, msg);
+    gpi_native_logger_log_v(name, level, pathname, funcname, lineno, msg, argp);
+    va_end(argp);
+}
+
+static gpi_log_handler_type *custom_log_handler = nullptr;
+static void *custom_log_handler_userdata = nullptr;
+
+void gpi_get_log_handler(gpi_log_handler_type **handler, void **userdata)
+{
+    *handler = custom_log_handler;
+    *userdata = custom_log_handler_userdata;
+}
+
+void gpi_set_log_handler(gpi_log_handler_type *handler, void *userdata)
+{
+    custom_log_handler = handler;
+    custom_log_handler_userdata = userdata;
+}
+
+void gpi_clear_log_handler(void)
+{
+    custom_log_handler = nullptr;
+    custom_log_handler_userdata = nullptr;
+}
+
+void gpi_log(const char *name, int level, const char *pathname, const char *funcname, long lineno, const char *msg, ...)
+{
+    va_list argp;
+    va_start(argp, msg);
+    if (custom_log_handler) {
+        (*custom_log_handler)(custom_log_handler_userdata, name, level, pathname, funcname, lineno, msg, argp);
+    } else {
+        gpi_native_logger_log_v(name, level, pathname, funcname, lineno, msg, argp);
+    }
+    va_end(argp);
+}
