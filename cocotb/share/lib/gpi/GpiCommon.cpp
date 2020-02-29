@@ -36,12 +36,17 @@
 #include <map>
 #include <algorithm>        // std::find
 #include <utility>          // std::pair
+#include <cstdarg>          // va_start, va_end, va_list
 
 using namespace std;
 
 static vector<GpiImplInterface*> registered_impls;
+
 static std::vector<std::pair<void (*)(void*, gpi_event_t, const char *), void*>> sim_event_callbacks;
 static std::vector<std::pair<void (*)(void*), void*>> sim_end_callbacks;
+
+static logging_handler_func_type p_log_handler= gpi_default_logger_handler;
+static void* p_log_handler_userdata = NULL;
 
 #ifdef SINGLETON_HANDLES
 
@@ -711,4 +716,113 @@ static bool load_libraries(const std::vector<std::pair<std::string, std::string>
     }
 
     return true;
+}
+
+void gpi_log(
+    const char *name,
+    enum gpi_log_levels level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    ...)
+{
+    va_list argp;
+    va_start(argp, msg);
+    p_log_handler(p_log_handler_userdata, name, level, pathname, funcname, lineno, msg, argp);
+    va_end(argp);
+}
+
+void gpi_set_log_handler(logging_handler_func_type logging_handler_func, void* userdata)
+{
+    p_log_handler = logging_handler_func;
+    p_log_handler_userdata = userdata;
+}
+
+namespace {
+
+    // Decode the level into a string matching the Python interpretation
+    struct _log_level_table {
+        long level;
+        const char *levelname;
+    };
+
+    static struct _log_level_table log_level_table [] = {
+        { 10,       "DEBUG"         },
+        { 20,       "INFO"          },
+        { 30,       "WARNING"       },
+        { 40,       "ERROR"         },
+        { 50,       "CRITICAL"      },
+        { 0,        NULL}
+    };
+
+    const char *log_level(long level)
+    {
+      struct _log_level_table *p;
+      const char *str = "------";
+
+      for (p=log_level_table; p->levelname; p++) {
+        if (level == p->level) {
+          str = p->levelname;
+          break;
+        }
+      }
+      return str;
+    }
+
+    static int p_default_logger_level = GPIInfo;
+}
+
+void* gpi_default_logger_userdata = NULL;
+
+void gpi_default_logger_handler(void* userdata, const char *name, enum gpi_log_levels level, const char *pathname, const char *funcname, long lineno, const char *msg, va_list argp)
+{
+    (void)userdata;
+
+    if (level < p_default_logger_level) {
+        return;
+    }
+
+    #ifndef GPI_LOG_SIZE
+    #define GPI_LOG_SIZE 512
+    #endif
+    static char log_buff[GPI_LOG_SIZE];
+
+    int n = vsnprintf(log_buff, GPI_LOG_SIZE, msg, argp);
+
+    if (n < 0 || n >= GPI_LOG_SIZE) {
+        fprintf(stderr, "Log message construction failed\n");
+    }
+
+    fprintf(stdout, "     -.--ns ");
+    fprintf(stdout, "%-9s", log_level(level));
+    fprintf(stdout, "%-35s", name);
+
+    size_t pathlen = strlen(pathname);
+    if (pathlen > 20) {
+        fprintf(stdout, "..%18s:", (pathname + (pathlen - 18)));
+    } else {
+        fprintf(stdout, "%20s:", pathname);
+    }
+
+    fprintf(stdout, "%-4ld", lineno);
+    fprintf(stdout, " in %-31s ", funcname);
+    fprintf(stdout, "%s", log_buff);
+    fprintf(stdout, "\n");
+    fflush(stdout);
+}
+
+int gpi_default_logger_set_level(int new_level)
+{
+    auto old_log_level = p_default_logger_level;
+    p_default_logger_level = new_level;
+    return old_log_level;
+}
+
+void gpi_default_logger_log(const char *name, enum gpi_log_levels level, const char *pathname, const char *funcname, long lineno, const char *msg, ...)
+{
+    va_list argp;
+    va_start(argp, msg);
+    gpi_default_logger_handler(gpi_default_logger_userdata, name, level, pathname, funcname, lineno, msg, argp);
+    va_end(argp);
 }

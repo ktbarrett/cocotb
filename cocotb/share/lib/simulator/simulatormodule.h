@@ -31,7 +31,6 @@
 #define _SIMULATOR_MODULE_H
 
 #include <Python.h>
-#include "gpi_logging.h"
 #include "gpi.h"
 
 // This file defines the routines available to Python

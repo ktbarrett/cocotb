@@ -969,7 +969,7 @@ static PyObject *log_level(PyObject *self, PyObject *args)
     py_level = PyTuple_GetItem(args, 0);
     new_level = (enum gpi_log_levels)PyLong_AsLong(py_level);
 
-    set_log_level(new_level);
+    gpi_default_logger_set_level(new_level);
 
     Py_RETURN_NONE;
 }

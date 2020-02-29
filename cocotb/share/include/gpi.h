@@ -57,8 +57,6 @@ we have to create a process with the signal on the sensitivity list to imitate a
 #include <stdio.h>
 #include <stdbool.h>
 
-#include <gpi_logging.h>
-
 #ifdef __cplusplus
 # define EXTERN_C_START extern "C" {
 # define EXTERN_C_END }
@@ -98,6 +96,54 @@ typedef void (*layer_entry_func)(void);
 #define GPI_ENTRY_POINT(NAME, func) \
     void NAME##_entry_point(void) { func(); }
 #endif
+
+// Functions for setting up logging
+
+enum gpi_log_levels {
+    GPIDebug = 10,
+    GPIInfo = 20,
+    GPIWarning = 30,
+    GPIError = 40,
+    GPICritical = 50
+};
+
+typedef void (*logging_handler_func_type)(
+    void*,
+    const char*,
+    enum gpi_log_levels,
+    const char*,
+    const char*,
+    long,
+    const char*,
+    va_list);
+
+#define LOG_DEBUG(...)     gpi_log("cocotb.gpi", GPIDebug,         __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_INFO(...)      gpi_log("cocotb.gpi", GPIInfo,          __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_WARN(...)      gpi_log("cocotb.gpi", GPIWarning,       __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_ERROR(...)     gpi_log("cocotb.gpi", GPIError,         __FILE__, __func__, __LINE__, __VA_ARGS__);
+#define LOG_CRITICAL(...)  do { \
+    gpi_log("cocotb.gpi", GPICritical,      __FILE__, __func__, __LINE__, __VA_ARGS__); \
+    exit(1); \
+} while (0)
+
+void gpi_log(
+    const char *name,
+    enum gpi_log_levels level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    ...);
+
+void gpi_set_log_handler(logging_handler_func_type logging_handler_func, void* userdata);
+
+void gpi_default_logger_handler(void* userdata, const char *name, enum gpi_log_levels level, const char *pathname, const char *funcname, long lineno, const char *msg, va_list argp);
+
+extern void* gpi_default_logger_userdata;
+
+int gpi_default_logger_set_level(int new_level);
+
+void gpi_default_logger_log(const char *name, enum gpi_log_levels level, const char *pathname, const char *funcname, long lineno, const char *msg, ...);
 
 // Functions for controlling/querying the simulation state
 

@@ -59,6 +59,8 @@ const char* PYTHON_INTERPRETER_PATH = "/bin/python";
 
 
 static PyObject *pEventFn = NULL;
+static PyObject *pLogHandler = NULL;
+static PyObject *pLogFilter = NULL;
 
 
 static void set_program_name_in_venv(void)
@@ -183,8 +185,10 @@ void embed_sim_cleanup(void* userdata)
         PyGILState_Ensure();    // Don't save state as we are calling Py_Finalize
         Py_DecRef(pEventFn);
         pEventFn = NULL;
-        clear_log_handler();
-        clear_log_filter();
+        Py_XDECREF(pLogHandler);
+        pLogHandler = NULL;
+        Py_XDECREF(pLogFilter);
+        pLogFilter = NULL;
         Py_Finalize();
         to_simulator();
     }
@@ -221,9 +225,18 @@ int get_module_ref(const char *modname, PyObject **mod)
 
 static void embed_sim_event(void*, gpi_event_t, const char*);
 
+static void cocotb_log_v(
+    void* userdata,
+    const char *name,
+    enum gpi_log_levels level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    va_list argp);
+
 int embed_sim_init(int argc, char const* const* argv)
 {
-
     gpi_register_sim_event_callback(embed_sim_event, NULL);
     gpi_register_sim_end_callback(embed_sim_cleanup, NULL);
 
@@ -260,7 +273,7 @@ int embed_sim_init(int argc, char const* const* argv)
         goto cleanup;
     }
 
-    set_log_handler(simlog_func);                                       // Note: This function steals a reference to simlog_func.
+    pLogHandler = simlog_func;                                          // Note: This global variable holds a reference to Python log handler
 
     // Obtain the function to check whether to call log function
     simlog_func = PyObject_GetAttrString(cocotb_gpi_module, "_filter_from_c");   // New reference
@@ -270,7 +283,9 @@ int embed_sim_init(int argc, char const* const* argv)
         goto cleanup;
     }
 
-    set_log_filter(simlog_func);                                        // Note: This function steals a reference to simlog_func.
+    pLogFilter = simlog_func;                                           // Note: This global variable holds a reference to Python log filter
+
+    gpi_set_log_handler(cocotb_log_v, NULL);
 
     entry_tuple = PyObject_CallMethod(cocotb_gpi_module, "_load_entry", NULL);
     if (entry_tuple == NULL) {
@@ -358,4 +373,125 @@ void embed_sim_event(void* userdata, gpi_event_t level, const char *msg)
         PyGILState_Release(gstate);
         to_simulator();
     }
+}
+
+/**
+ * @name    Cocotb logging
+ * @brief   Write a log message using cocotb SimLog class
+ * @ingroup python_c_api
+ *
+ * GILState before calling: Unknown
+ *
+ * GILState after calling: Unknown
+ *
+ * Makes one call to PyGILState_Ensure and one call to PyGILState_Release
+ *
+ * If the Python logging mechanism is not initialised, dumps to `stderr`.
+ *
+ */
+static void cocotb_log_v(
+    void* userdata,
+    const char *name,
+    enum gpi_log_levels level,
+    const char *pathname,
+    const char *funcname,
+    long lineno,
+    const char *msg,
+    va_list argp)
+{
+    (void)userdata;
+
+    #ifndef COCOTB_LOG_SIZE
+    #define COCOTB_LOG_SIZE 512
+    #endif
+    static char log_buff[COCOTB_LOG_SIZE];
+
+    /* We first check that the log level means this will be printed
+     * before going to the expense of formatting the variable arguments
+     */
+    if (!pLogHandler) {
+        gpi_default_logger_handler(gpi_default_logger_userdata, name, level, pathname, funcname, lineno, msg, argp);
+        return;
+    }
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    // Declared here in order to be initialized before any goto statements and refcount cleanup
+    PyObject *logger_name_arg = NULL, *filename_arg = NULL, *lineno_arg = NULL, *msg_arg = NULL, *function_arg = NULL;
+
+    PyObject *level_arg = PyLong_FromLong(level);                  // New reference
+    if (level_arg == NULL) {
+        goto error;
+    }
+
+    logger_name_arg = PyUnicode_FromString(name);      // New reference
+    if (logger_name_arg == NULL) {
+        goto error;
+    }
+
+    PyObject *filter_ret = PyObject_CallFunctionObjArgs(pLogFilter, logger_name_arg, level_arg, NULL);
+    if (filter_ret == NULL) {
+        goto error;
+    }
+
+    int is_enabled = PyObject_IsTrue(filter_ret);
+    Py_DECREF(filter_ret);
+    if (is_enabled < 0) {
+        /* A python exception occured while converting `filter_ret` to bool */
+        goto error;
+    }
+
+    if (!is_enabled) {
+        goto ok;
+    }
+
+    // Ignore truncation
+    {
+        int n = vsnprintf(log_buff, COCOTB_LOG_SIZE, msg, argp);
+        if (n < 0 || n >= COCOTB_LOG_SIZE) {
+            fprintf(stderr, "Log message construction failed\n");
+        }
+    }
+
+    filename_arg = PyUnicode_FromString(pathname);      // New reference
+    if (filename_arg == NULL) {
+        goto error;
+    }
+
+    lineno_arg = PyLong_FromLong(lineno);               // New reference
+    if (lineno_arg == NULL) {
+        goto error;
+    }
+
+    msg_arg = PyUnicode_FromString(log_buff);           // New reference
+    if (msg_arg == NULL) {
+        goto error;
+    }
+
+    function_arg = PyUnicode_FromString(funcname);      // New reference
+    if (function_arg == NULL) {
+        goto error;
+    }
+
+    // Log function args are logger_name, level, filename, lineno, msg, function
+    PyObject *handler_ret = PyObject_CallFunctionObjArgs(pLogHandler, logger_name_arg, level_arg, filename_arg, lineno_arg, msg_arg, function_arg, NULL);
+    if (handler_ret == NULL) {
+        goto error;
+    }
+    Py_DECREF(handler_ret);
+
+    goto ok;
+error:
+    /* Note: don't call the LOG_ERROR macro because that might recurse */
+    gpi_default_logger_handler(gpi_default_logger_userdata, name, level, pathname, funcname, lineno, msg, argp);
+    gpi_default_logger_log("cocotb.gpi", GPIError, __FILE__, __func__, __LINE__, "Error calling Python logging function from C while logging the above");
+    PyErr_Print();
+ok:
+    Py_XDECREF(logger_name_arg);
+    Py_XDECREF(level_arg);
+    Py_XDECREF(filename_arg);
+    Py_XDECREF(lineno_arg);
+    Py_XDECREF(msg_arg);
+    Py_XDECREF(function_arg);
+    PyGILState_Release(gstate);
 }
