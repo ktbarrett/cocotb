@@ -226,7 +226,6 @@ static PyObject *log_msg(PyObject *self, PyObject *args)
 static PyObject *register_readonly_callback(PyObject *self, PyObject *args)
 {
     COCOTB_UNUSED(self);
-    FENTER
 
     PyObject *fArgs;
     PyObject *function;
@@ -270,7 +269,6 @@ static PyObject *register_readonly_callback(PyObject *self, PyObject *args)
     hdl = gpi_register_readonly_callback((gpi_function_t)handle_gpi_callback, callback_data_p);
 
     PyObject *rv = PyLong_FromVoidPtr(hdl);
-    FEXIT
 
     return rv;
 }
@@ -279,7 +277,6 @@ static PyObject *register_readonly_callback(PyObject *self, PyObject *args)
 static PyObject *register_rwsynch_callback(PyObject *self, PyObject *args)
 {
     COCOTB_UNUSED(self);
-    FENTER
 
     PyObject *fArgs;
     PyObject *function;
@@ -323,7 +320,6 @@ static PyObject *register_rwsynch_callback(PyObject *self, PyObject *args)
     hdl = gpi_register_readwrite_callback((gpi_function_t)handle_gpi_callback, callback_data_p);
 
     PyObject *rv = PyLong_FromVoidPtr(hdl);
-    FEXIT
 
     return rv;
 }
@@ -332,7 +328,6 @@ static PyObject *register_rwsynch_callback(PyObject *self, PyObject *args)
 static PyObject *register_nextstep_callback(PyObject *self, PyObject *args)
 {
     COCOTB_UNUSED(self);
-    FENTER
 
     PyObject *fArgs;
     PyObject *function;
@@ -376,7 +371,6 @@ static PyObject *register_nextstep_callback(PyObject *self, PyObject *args)
     hdl = gpi_register_nexttime_callback((gpi_function_t)handle_gpi_callback, callback_data_p);
 
     PyObject *rv = PyLong_FromVoidPtr(hdl);
-    FEXIT
 
     return rv;
 }
@@ -389,7 +383,6 @@ static PyObject *register_nextstep_callback(PyObject *self, PyObject *args)
 static PyObject *register_timed_callback(PyObject *self, PyObject *args)
 {
     COCOTB_UNUSED(self);
-    FENTER
 
     PyObject *fArgs;
     PyObject *function;
@@ -448,7 +441,6 @@ static PyObject *register_timed_callback(PyObject *self, PyObject *args)
 
     // Check success
     PyObject *rv = PyLong_FromVoidPtr(hdl);
-    FEXIT
 
     return rv;
 }
@@ -461,7 +453,6 @@ static PyObject *register_timed_callback(PyObject *self, PyObject *args)
 static PyObject *register_value_change_callback(PyObject *self, PyObject *args) //, PyObject *keywds)
 {
     COCOTB_UNUSED(self);
-    FENTER
 
     PyObject *fArgs;
     PyObject *function;
@@ -521,7 +512,6 @@ static PyObject *register_value_change_callback(PyObject *self, PyObject *args) 
 
     // Check success
     PyObject *rv = PyLong_FromVoidPtr(hdl);
-    FEXIT
 
     return rv;
 }
@@ -961,15 +951,12 @@ static PyObject *deregister_callback(PyObject *self, PyObject *args)
     COCOTB_UNUSED(self);
     gpi_sim_hdl hdl;
 
-    FENTER
-
     if (!PyArg_ParseTuple(args, "O&", gpi_sim_hdl_converter, &hdl)) {
         return NULL;
     }
 
     gpi_deregister_callback(hdl);
 
-    FEXIT
     Py_RETURN_NONE;
 }
 

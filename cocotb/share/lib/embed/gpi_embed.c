@@ -110,7 +110,6 @@ static void set_program_name_in_venv(void)
 
 void embed_init_python(void)
 {
-    FENTER;
 
 #ifndef PYTHON_SO_LIB
 #error "Python version needs passing in with -DPYTHON_SO_VERSION=libpython<ver>.so"
@@ -146,19 +145,17 @@ void embed_init_python(void)
            as well as correct parses that would be sliced by the narrowing cast */
         if (errno == ERANGE || sleep_time >= UINT_MAX) {
             LOG_ERROR("COCOTB_ATTACH only needs to be set to ~30 seconds");
-            goto out;
+            return;
         }
         if ((errno != 0 && sleep_time == 0) ||
             (sleep_time <= 0)) {
             LOG_ERROR("COCOTB_ATTACH must be set to an integer base 10 or omitted");
-            goto out;
+            return;
         }
 
         LOG_ERROR("Waiting for %lu seconds - attach to PID %d with your debugger\n", sleep_time, getpid());
         sleep((unsigned int)sleep_time);
     }
-out:
-    FEXIT;
 }
 
 /**
@@ -226,7 +223,6 @@ static void embed_sim_event(void*, gpi_event_t, const char*);
 
 int embed_sim_init(int argc, char const* const* argv)
 {
-    FENTER
 
     gpi_register_sim_event_callback(embed_sim_event, NULL);
     gpi_register_sim_end_callback(embed_sim_cleanup, NULL);
@@ -319,7 +315,6 @@ int embed_sim_init(int argc, char const* const* argv)
         goto cleanup;
     }
 
-    FEXIT
     goto ok;
 
 cleanup:
@@ -340,7 +335,6 @@ ok:
 
 void embed_sim_event(void* userdata, gpi_event_t level, const char *msg)
 {
-    FENTER
     /* Indicate to the upper layer a sim event occurred */
 
     (void)userdata;
@@ -364,6 +358,4 @@ void embed_sim_event(void* userdata, gpi_event_t level, const char *msg)
         PyGILState_Release(gstate);
         to_simulator();
     }
-
-    FEXIT
 }
