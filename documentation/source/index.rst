@@ -15,6 +15,7 @@ Contents:
    triggers
    testbench_tools
    python_entry_point
+   gpi_users
    library_reference
    library_reference_c
    endian_swapper

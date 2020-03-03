@@ -217,6 +217,15 @@ Environment Variables
 
         .. versionadded:: 1.4
 
+.. envvar:: GPI_USERS
+
+    A list of users of the GPI to load at runtime *after* elaboration.
+    This list is delimited by ``:``.
+    Elements of this list represent dynamically loaded library and an optional entry point name.
+    List entries should be of the form ``name`` or ``name:entry_point``.
+    An entry of ``name`` loads ``lib{name}.so`` on Unix platforms.
+    If no entry point name is specified, it is defaulted to ``{name}_entry_point``.
+    See :ref:`gpi-users` for more details.
 
 Additional Environment Variables
 --------------------------------
