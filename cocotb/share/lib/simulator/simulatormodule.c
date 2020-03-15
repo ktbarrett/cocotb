@@ -34,13 +34,15 @@
 * Uses GPI calls to interface to the simulator.
 */
 
+#include <Python.h>
+#include "gpi.h"
+#include "gpi_logging.h"
+#include <cocotb_utils.h>     // COCOTB_UNUSED
+
 static int takes = 0;
 static int releases = 0;
 
 static int sim_ending = 0;
-
-#include "simulatormodule.h"
-#include <cocotb_utils.h>     // COCOTB_UNUSED
 
 struct module_state {
     PyObject *error;
@@ -69,6 +71,21 @@ struct sim_time {
 };
 
 static struct sim_time cache_time;
+
+#define COCOTB_ACTIVE_ID        0xC0C07B        // User data flag to indicate callback is active
+#define COCOTB_INACTIVE_ID      0xDEADB175      // User data flag set when callback has been de-registered
+
+#define MODULE_NAME "simulator"
+
+// callback user data
+typedef struct t_callback_data {
+    PyThreadState *_saved_thread_state; // Thread state of the calling thread FIXME is this required?
+    uint32_t id_value;                  // COCOTB_ACTIVE_ID or COCOTB_INACTIVE_ID
+    PyObject *function;                 // Function to call when the callback fires
+    PyObject *args;                     // The arguments to call the function with
+    PyObject *kwargs;                   // Keyword arguments to call the function with
+    gpi_sim_hdl cb_hdl;
+} s_callback_data, *p_callback_data;
 
 // Converter function for turning a Python long into a sim handle, such that it
 // can be used by PyArg_ParseTuple format O&.
@@ -1034,6 +1051,45 @@ static int simulator_clear(PyObject *m) {
     Py_CLEAR(GETSTATE(m)->error);
     return 0;
 }
+
+static PyMethodDef SimulatorMethods[] = {
+    {"log_msg", log_msg, METH_VARARGS, "Log a message"},
+    {"get_signal_val_long", get_signal_val_long, METH_VARARGS, "Get the value of a signal as a long"},
+    {"get_signal_val_str", get_signal_val_str, METH_VARARGS, "Get the value of a signal as an ASCII string"},
+    {"get_signal_val_binstr", get_signal_val_binstr, METH_VARARGS, "Get the value of a signal as a binary string"},
+    {"get_signal_val_real", get_signal_val_real, METH_VARARGS, "Get the value of a signal as a double precision float"},
+    {"set_signal_val_long", set_signal_val_long, METH_VARARGS, "Set the value of a signal using a long"},
+    {"set_signal_val_str", set_signal_val_str, METH_VARARGS, "Set the value of a signal using an NUL-terminated 8-bit string"},
+    {"set_signal_val_binstr", set_signal_val_binstr, METH_VARARGS, "Set the value of a signal using a string with a character per bit"},
+    {"set_signal_val_real", set_signal_val_real, METH_VARARGS, "Set the value of a signal using a double precision float"},
+    {"get_definition_name", get_definition_name, METH_VARARGS, "Get the name of a GPI object's definition"},
+    {"get_definition_file", get_definition_file, METH_VARARGS, "Get the file that sources the object's definition"},
+    {"get_handle_by_name", get_handle_by_name, METH_VARARGS, "Get handle of a named object"},
+    {"get_handle_by_index", get_handle_by_index, METH_VARARGS, "Get handle of a object at an index in a parent"},
+    {"get_root_handle", get_root_handle, METH_VARARGS, "Get the root handle"},
+    {"get_name_string", get_name_string, METH_VARARGS, "Get the name of an object as a string"},
+    {"get_type_string", get_type_string, METH_VARARGS, "Get the type of an object as a string"},
+    {"get_type", get_type, METH_VARARGS, "Get the type of an object, mapped to a GPI enumeration"},
+    {"get_const", get_const, METH_VARARGS, "Get a flag indicating whether the object is a constant"},
+    {"get_num_elems", get_num_elems, METH_VARARGS, "Get the number of elements contained in the handle"},
+    {"get_range", get_range, METH_VARARGS, "Get the range of elements (tuple) contained in the handle, returns None if not indexable"},
+    {"register_timed_callback", register_timed_callback, METH_VARARGS, "Register a timed callback"},
+    {"register_value_change_callback", register_value_change_callback, METH_VARARGS, "Register a signal change callback"},
+    {"register_readonly_callback", register_readonly_callback, METH_VARARGS, "Register a callback for the read-only section"},
+    {"register_nextstep_callback", register_nextstep_callback, METH_VARARGS, "Register a callback for the NextSimTime callback"},
+    {"register_rwsynch_callback", register_rwsynch_callback, METH_VARARGS, "Register a callback for the read-write section"},
+    {"stop_simulator", stop_simulator, METH_VARARGS, "Instruct the attached simulator to stop"},
+    {"iterate", iterate, METH_VARARGS, "Get an iterator handle to loop over all members in an object"},
+    {"next", next, METH_VARARGS, "Get the next object from the iterator"},
+    {"log_level", log_level, METH_VARARGS, "Set the log level for GPI"},
+    {"get_sim_time", get_sim_time, METH_VARARGS, "Get the current simulation time as an int tuple"},
+    {"get_precision", get_precision, METH_VARARGS, "Get the precision of the simulator"},
+    {"deregister_callback", deregister_callback, METH_VARARGS, "De-register a callback"},
+    {"error_out", error_out, METH_NOARGS, NULL},
+    {"get_simulator_product", get_simulator_product, METH_NOARGS, "Simulator product information"},
+    {"get_simulator_version", get_simulator_version, METH_NOARGS, "Simulator product version information"},
+    {NULL, NULL, 0, NULL}        /* Sentinel */
+};
 
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
