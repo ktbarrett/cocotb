@@ -869,7 +869,7 @@ int VhpiStartupCbHdl::run_callback() {
         vhpi_release_handle(tool);
     }
 
-    gpi_embed_init(tool_argc, tool_argv);
+    gpi_sim_startup(tool_argc, tool_argv);
     delete [] tool_argv;
 
     return 0;
@@ -883,7 +883,7 @@ VhpiShutdownCbHdl::VhpiShutdownCbHdl(GpiImplInterface *impl) : GpiCbHdl(impl),
 
 int VhpiShutdownCbHdl::run_callback() {
     set_call_state(GPI_DELETE);
-    gpi_embed_end();
+    gpi_sim_shutdown();
     return 0;
 }
 

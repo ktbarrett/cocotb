@@ -30,7 +30,6 @@
 #define COCOTB_GPI_PRIV_H_
 
 #include <gpi.h>
-#include <embed.h>
 #include <string>
 #include <vector>
 #include <map>
@@ -327,21 +326,24 @@ private:
 /* Called from implementation layers back up the stack */
 int gpi_register_impl(GpiImplInterface *func_tbl);
 
-void gpi_embed_init(int argc, char const* const* argv);
-void gpi_cleanup();
-void gpi_embed_end();
-void gpi_embed_event(gpi_event_t level, const char *msg);
+/**
+ * Called by implementation startup routine to signal startup event to users.
+ */
+void gpi_sim_startup(int argc, char const* const* argv);
+
+/**
+ * Called by implementation shutdown routine to signal shutdown event to users.
+ */
+void gpi_sim_shutdown();
+
+/**
+ * Called by implementation event handler routine to signal simulator event to users.
+ */
+void gpi_sim_event(gpi_event_t level, const char *msg);
+
+/**
+ * Called by implementation to load GPI_EXTRA libraries.
+ */
 void gpi_load_extra_libs();
-
-typedef void (*layer_entry_func)();
-
-/* Use this macro in an implementation layer to define an entry point */
-#define GPI_ENTRY_POINT(NAME, func) \
-    extern "C" { \
-        void NAME##_entry_point()  \
-        { \
-            func(); \
-        } \
-    }
 
 #endif /* COCOTB_GPI_PRIV_H_ */

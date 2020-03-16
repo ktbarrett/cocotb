@@ -1169,6 +1169,39 @@ static PyObject *clear_log_handler(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static void cocotb_sim_event(void *python_event_func, gpi_event_t event, char const *msg)
+{
+    to_python();
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    if (msg == NULL) {
+        msg = "No message provided";
+    }
+
+    PyObject *res = PyObject_CallFunction(python_event_func, "is", event, msg);
+    if (!res) {
+        PyErr_Print();
+        LOG_ERROR("Python simulator event callback returned NULL");
+    }
+    Py_XDECREF(res);
+    PyGILState_Release(gstate);
+    to_simulator();
+}
+
+static PyObject *register_sim_event_callback(PyObject *self, PyObject *args)
+{
+    COCOTB_UNUSED(self);
+
+    PyObject *python_event_func = NULL;
+    if (!PyArg_ParseTuple(args, "O", &python_event_func))
+        return NULL;
+    Py_INCREF(python_event_func);
+
+    gpi_register_sim_event_callback(cocotb_sim_event, python_event_func);
+
+    Py_RETURN_NONE;
+}
+
 static int simulator_traverse(PyObject *m, visitproc visit, void *arg) {
     Py_VISIT(GETSTATE(m)->error);
     return 0;
@@ -1218,6 +1251,7 @@ static PyMethodDef SimulatorMethods[] = {
     {"log_msg", log_msg, METH_VARARGS, "Log a message using the current GPI logger"},
     {"set_log_handler", set_log_handler, METH_VARARGS, "Set a custom GPI log handler"},
     {"clear_log_handler", clear_log_handler, METH_NOARGS, "Reset the GPI log handler back to the native logger"},
+    {"register_sim_event_callback", register_sim_event_callback, METH_VARARGS, "Register a Python function to be called when a simulator event happens"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

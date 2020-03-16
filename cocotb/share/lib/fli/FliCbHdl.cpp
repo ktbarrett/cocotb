@@ -201,7 +201,7 @@ int FliStartupCbHdl::run_callback()
     int argc = argv_cstr.size();
     const char** argv = argv_cstr.data();
 
-    gpi_embed_init(argc, argv);
+    gpi_sim_startup(argc, argv);
 
     return 0;
 }
@@ -216,7 +216,7 @@ int FliShutdownCbHdl::arm_callback()
 
 int FliShutdownCbHdl::run_callback()
 {
-    gpi_embed_end();
+    gpi_sim_shutdown();
 
     return 0;
 }

@@ -122,15 +122,53 @@ int gpi_register_impl(GpiImplInterface *func_tbl)
     return 0;
 }
 
-void gpi_embed_init(int argc, char const* const* argv)
+static std::vector<std::pair<gpi_sim_startup_callback*, void*>> startup_callbacks;
+static std::vector<std::pair<gpi_sim_shutdown_callback*, void*>> shutdown_callbacks;
+static std::vector<std::pair<gpi_sim_event_callback*, void*>> event_callbacks;
+
+void gpi_register_sim_startup_callback(gpi_sim_startup_callback *callback, void *userdata)
 {
-    if (embed_sim_init(argc, argv))
-        gpi_embed_end();
+    startup_callbacks.emplace_back(callback, userdata);
 }
 
-void gpi_embed_end()
+void gpi_register_sim_shutdown_callback(gpi_sim_shutdown_callback *callback, void *userdata)
 {
-    embed_sim_event(SIM_FAIL, "Simulator shutdown prematurely");
+    shutdown_callbacks.emplace_back(callback, userdata);
+}
+
+void gpi_register_sim_event_callback(gpi_sim_event_callback *callback, void *userdata)
+{
+    event_callbacks.emplace_back(callback, userdata);
+}
+
+void gpi_sim_startup(int argc, char const* const* argv)
+{
+    for (auto& pair : startup_callbacks) {
+        auto callback = pair.first;
+        auto userdata = pair.second;
+
+        if ((*callback)(userdata, argc, argv)) {
+            gpi_sim_shutdown();
+            return;
+        }
+    }
+}
+
+void gpi_cleanup(void)
+{
+    // perform all shutdown procedures
+    for (auto& pair : shutdown_callbacks) {
+        auto callback = pair.first;
+        auto userdata = pair.second;
+
+        (*callback)(userdata);
+    }
+    CLEAR_STORE();  // FIXME SINGLETON_HANDLE
+}
+
+void gpi_sim_shutdown()
+{
+    gpi_sim_event(SIM_FAIL, "Simulator shutdown prematurely");
     gpi_cleanup();
 }
 
@@ -139,15 +177,14 @@ void gpi_sim_end()
     registered_impls[0]->sim_end();
 }
 
-void gpi_cleanup(void)
+void gpi_sim_event(gpi_event_t level, const char *msg)
 {
-    CLEAR_STORE();
-    embed_sim_cleanup();
-}
+    for (auto& pair : event_callbacks) {
+        auto callback = pair.first;
+        auto userdata = pair.second;
 
-void gpi_embed_event(gpi_event_t level, const char *msg)
-{
-    embed_sim_event(level, msg);
+        (*callback)(userdata, level, msg);
+    }
 }
 
 static void gpi_load_libs(std::vector<std::string> to_load)
@@ -175,7 +212,7 @@ static void gpi_load_libs(std::vector<std::string> to_load)
             exit(1);
         }
 
-        layer_entry_func new_lib_entry = (layer_entry_func)entry_point;
+        gpi_extra_entry_func* new_lib_entry = (gpi_extra_entry_func*)entry_point;
         new_lib_entry();
     }
 }
@@ -204,8 +241,6 @@ void gpi_load_extra_libs()
         gpi_load_libs(to_load);
     }
 
-    /* Finally embed Python */
-    embed_init_python();
     gpi_print_registered_impl();
 }
 

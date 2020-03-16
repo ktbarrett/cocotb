@@ -484,7 +484,7 @@ int VpiStartupCbHdl::run_callback() {
 
     vpi_get_vlog_info(&info);
 
-    gpi_embed_init(info.argc, info.argv);
+    gpi_sim_startup(info.argc, info.argv);
 
     return 0;
 }
@@ -496,7 +496,7 @@ VpiShutdownCbHdl::VpiShutdownCbHdl(GpiImplInterface *impl) : GpiCbHdl(impl),
 }
 
 int VpiShutdownCbHdl::run_callback() {
-    gpi_embed_end();
+    gpi_sim_shutdown();
     return 0;
 }
 

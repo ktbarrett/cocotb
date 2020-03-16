@@ -182,11 +182,65 @@ void gpi_native_logger_log_v(
  */
 int gpi_native_logger_set_level(int level);
 
+/**
+ * Type of an entry function loaded by GPI_EXTRA.
+ */
+typedef void (gpi_extra_entry_func)(void);
+
+/**
+
+ * Type of a simulator startup event callback.
+ * @param[in] userdata  State information passed to every call of the callback
+ * @param[in] argc      Number of arguments in argv
+ * @param[in] argv      List of argument strings of length argc
+ * @returns             0 for successful initialization, non-0 for unsuccessful initialization
+ */
+typedef int (gpi_sim_startup_callback)(void *userdata, int argc, char const *const *argv);
+
+/**
+ * Type of a simulator shutdown event callback.
+ * @param[in] userdata  State information passed to every call of the callback
+ */
+typedef void (gpi_sim_shutdown_callback)(void *userdata);
+
+/**
+ * Other supported simulator events.
+ */
 typedef enum gpi_event_e {
     SIM_INFO = 0,
     SIM_TEST_FAIL = 1,
     SIM_FAIL = 2,
 } gpi_event_t;
+
+/**
+ * Type of a simulator event callback.
+ * This callback acts as a catch-all for all non-startup/shutdown events.
+ * @param[in] userdata  State information passed to every call of the callback
+ * @param[in] event     The type of event that occured
+ * @param[in] msg       A message string giving detail to the event
+ */
+typedef void (gpi_sim_event_callback)(void *userdata, gpi_event_t event, char const *msg);
+
+/**
+ * Register a callback to be called during startup after elaboration.
+ * @param[in] callback   The callback function to be called when startup event occurs
+ * @param[in] userdata  State information to be passed to the callback whenever it is called
+ */
+void gpi_register_sim_startup_callback(gpi_sim_startup_callback *callback, void *userdata);
+
+/**
+ * Register a callback to be called during shutdown.
+ * @param[in] callback   The callback function to be called when shutdown event occurs
+ * @param[in] userdata  State information to be passed to the callback whenever it is called
+ */
+void gpi_register_sim_shutdown_callback(gpi_sim_shutdown_callback *callback, void *userdata);
+
+/**
+ * Register a callback to be called when a runtime simulator event occurs.
+ * @param[in] callback   The callback function to be called when a runtime simulator event occurs
+ * @param[in] userdata  State information to be passed to the callback whenever it is called
+ */
+void gpi_register_sim_event_callback(gpi_sim_event_callback *callback, void *userdata);
 
 // Define a type for our simulation handle.
 typedef void * gpi_sim_hdl;
@@ -329,5 +383,11 @@ size_t gpi_print_registered_impl(void);
         return -1
 
 EXTERN_C_END
+
+#ifdef __cplusplus
+    #define GPI_ENTRY_POINT(NAME, func) extern "C" void NAME##_entry_point() { func(); }
+#else
+    #define GPI_ENTRY_POINT(NAME, func) void NAME##_entry_point(void) { func(); }
+#endif
 
 #endif /* COCOTB_GPI_H_ */

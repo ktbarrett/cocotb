@@ -103,6 +103,9 @@ $(info $(helpmsg))
 $(error "Stopping after printing help")
 endif
 
+GPI_EXTRA ?= cocotb
+export GPI_EXTRA
+
 SIM_BUILD ?= sim_build
 export SIM_BUILD
 

@@ -32,7 +32,7 @@
 #include <Python.h>
 #include <unistd.h>
 #include <cocotb_utils.h>
-#include "embed.h"
+#include "gpi.h"
 #include "locale.h"
 
 #if defined(_WIN32)
@@ -56,9 +56,6 @@ const char* PYTHON_INTERPRETER_PATH = "\\Scripts\\python";
 #else
 const char* PYTHON_INTERPRETER_PATH = "/bin/python";
 #endif
-
-
-static PyObject *pEventFn = NULL;
 
 
 static void set_program_name_in_venv(void)
@@ -171,17 +168,17 @@ void embed_init_python(void)
  *
  * Cleans up reference counts for Python objects and calls Py_Finalize function.
  */
-void embed_sim_cleanup(void)
+void embed_sim_cleanup(void *userdata)
 {
+    COCOTB_UNUSED(userdata);
     // If initialization fails, this may be called twice:
     // Before the initial callback returns and in the final callback.
     // So we check if Python is still initialized before doing cleanup.
     if (Py_IsInitialized()) {
+        gpi_clear_log_handler();
         to_python();
         gpi_clear_log_handler();
         PyGILState_Ensure();    // Don't save state as we are calling Py_Finalize
-        Py_DecRef(pEventFn);
-        pEventFn = NULL;
         Py_Finalize();
         to_simulator();
     }
@@ -215,15 +212,15 @@ int get_module_ref(const char *modname, PyObject **mod)
     return 0;
 }
 
-int embed_sim_init(int argc, char const * const * argv)
+int embed_sim_init(void *userdata, int argc, char const * const * argv)
 {
+    COCOTB_UNUSED(userdata);
 
     int i;
     int ret = 0;
 
-    /* Check that we are not already initialized */
-    if (pEventFn)
-        return ret;
+    // initialize Python interpreter
+    embed_init_python();
 
     // Find the simulation root
     const char *dut = getenv("TOPLEVEL");
@@ -310,19 +307,6 @@ int embed_sim_init(int argc, char const * const * argv)
     }
     Py_DECREF(PyLang);
 
-    pEventFn = PyObject_GetAttrString(cocotb_module, "_sim_event");     // New reference
-    if (pEventFn == NULL) {
-        PyErr_Print();
-        LOG_ERROR("Failed to get the _sim_event method");
-        goto cleanup;
-    }
-    if (!PyCallable_Check(pEventFn)) {
-        LOG_ERROR("cocotb._sim_event is not callable");
-        Py_DECREF(pEventFn);
-        pEventFn = NULL;
-        goto cleanup;
-    }
-
     cocotb_init = PyObject_GetAttrString(cocotb_module, "_initialise_testbench");   // New reference
     if (cocotb_init == NULL) {
         PyErr_Print();
@@ -374,26 +358,12 @@ ok:
     return ret;
 }
 
-void embed_sim_event(gpi_event_t level, const char *msg)
+
+void entry_point(void)
 {
-    /* Indicate to the upper layer a sim event occurred */
-
-    if (pEventFn) {
-        PyGILState_STATE gstate;
-        to_python();
-        gstate = PyGILState_Ensure();
-
-        if (msg == NULL) {
-            msg = "No message provided";
-        }
-
-        PyObject* pValue = PyObject_CallFunction(pEventFn, "ls", level, msg);
-        if (pValue == NULL) {
-            PyErr_Print();
-            LOG_ERROR("Passing event to upper layer failed");
-        }
-        Py_XDECREF(pValue);
-        PyGILState_Release(gstate);
-        to_simulator();
-    }
+    gpi_register_sim_startup_callback(embed_sim_init, NULL);
+    gpi_register_sim_shutdown_callback(embed_sim_cleanup, NULL);
 }
+
+
+GPI_ENTRY_POINT(cocotb, entry_point)
