@@ -195,84 +195,68 @@ void embed_sim_cleanup(void *userdata)
  *
  * Makes one call to PyGILState_Ensure and one call to PyGILState_Release
  *
- * Loads the Python module called cocotb and calls the _initialise_testbench function
+ * Loads the Python module called cocotb and calls the entry point loader function
  */
-
-int get_module_ref(const char *modname, PyObject **mod)
-{
-    PyObject *pModule = PyImport_ImportModule(modname);
-
-    if (pModule == NULL) {
-        PyErr_Print();
-        LOG_ERROR("Failed to load Python module \"%s\"\n", modname);
-        return -1;
-    }
-
-    *mod = pModule;
-    return 0;
-}
-
 int embed_sim_init(void *userdata, int argc, char const * const * argv)
 {
     COCOTB_UNUSED(userdata);
 
-    int i;
     int ret = 0;
 
     // initialize Python interpreter
     embed_init_python();
 
-    PyObject *cocotb_module, *cocotb_retval;
-    PyObject *argv_list;
-
-    cocotb_module = NULL;
+    PyObject *cocotb_module = NULL;
+    PyObject *cocotb_retval = NULL;
+    PyObject *argv_list = NULL;
 
     // Ensure that the current thread is ready to call the Python C API
     PyGILState_STATE gstate = PyGILState_Ensure();
     to_python();
 
-    if (get_module_ref("cocotb", &cocotb_module)) {
+    cocotb_module = PyImport_ImportModule("cocotb");
+    if (!cocotb_module) {
+        PyErr_Print();
+        LOG_ERROR("Failed to load cocotb Python module");
         goto cleanup;
     }
 
     // Build argv for cocotb module
     argv_list = PyList_New(argc);                                               // New reference
-    if (argv_list == NULL) {
+    if (!argv_list) {
         PyErr_Print();
         LOG_ERROR("Unable to create argv list");
         goto cleanup;
     }
-    for (i = 0; i < argc; i++) {
+    for (int i = 0; i < argc; i++) {
         // Decode, embedding non-decodable bytes using PEP-383. This can only
         // fail with MemoryError or similar.
         PyObject *argv_item = PyUnicode_DecodeLocale(argv[i], "surrogateescape");  // New reference
-        if (argv_item == NULL) {
+        if (!argv_item) {
             PyErr_Print();
             LOG_ERROR("Unable to convert command line argument %d to Unicode string.", i);
-            Py_DECREF(argv_list);
             goto cleanup;
         }
         PyList_SET_ITEM(argv_list, i, argv_item);                               // Note: This function steals the reference to argv_item
     }
 
     cocotb_retval = PyObject_CallMethod(cocotb_module, "_entry_loader", "O", argv_list);
-    Py_DECREF(argv_list);
-
-    if (cocotb_retval != NULL) {
-        LOG_DEBUG("_initialise_testbench successful");
-        Py_DECREF(cocotb_retval);
-    } else {
+    if (!cocotb_retval) {
         PyErr_Print();
         LOG_ERROR("cocotb initialization failed - exiting");
         goto cleanup;
     }
 
+    LOG_DEBUG("cocotb initialization successful");
     goto ok;
 
 cleanup:
     ret = -1;
+
 ok:
     Py_XDECREF(cocotb_module);
+    Py_XDECREF(argv_list);
+    Py_XDECREF(cocotb_retval);
 
     PyGILState_Release(gstate);
     to_simulator();
