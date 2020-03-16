@@ -939,8 +939,10 @@ static PyObject *stop_simulator(PyObject *self, PyObject *args)
 {
     COCOTB_UNUSED(self);
     COCOTB_UNUSED(args);
+    to_simulator();
     gpi_sim_end();
     sim_ending = 1;
+    to_python();
     Py_RETURN_NONE;
 }
 
