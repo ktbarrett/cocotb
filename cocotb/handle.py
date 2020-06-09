@@ -31,10 +31,11 @@
 
 import ctypes
 import warnings
+import functools
 
 import cocotb
 from cocotb import simulator
-from cocotb.binary import BinaryValue
+from cocotb.binary import BinaryValue, BinaryRepresentation
 from cocotb.log import SimLog
 from cocotb.result import TestError
 
@@ -661,6 +662,22 @@ class Release(_SetAction):
         return 0, 2  # GPI_RELEASE
 
 
+@functools.lru_cache(maxsize=None)
+def _min_value(width: int) -> int:
+    """
+    Returns minimum value that can be stored in an signed integer of the given width, *and* a signed 32 bit integer.
+    """
+    return -(2 ** min(width - 1, 31))
+
+
+@functools.lru_cache(maxsize=None)
+def _max_value(width: int) -> int:
+    """
+    Returns maximum value that can be stored in an unsigned integer of the given width, *and* a signed 32 bit integer.
+    """
+    return (2 ** min(width, 31)) - 1
+
+
 class ModifiableObject(NonConstantObject):
     """Base class for simulator objects whose values can be modified."""
 
@@ -683,13 +700,21 @@ class ModifiableObject(NonConstantObject):
         """
         value, set_action = self._check_for_set_action(value)
 
-        if isinstance(value, int) and value < 0x7fffffff and len(self) <= 32:
-            call_sim(self, self._handle.set_signal_val_long, set_action, value)
-            return
-        if isinstance(value, ctypes.Structure):
+        if isinstance(value, int):
+            width = len(self)
+            if _min_value(width) <= value <= _max_value(width):
+                # handles case where value fits in signal and can be passed to fast case function
+                call_sim(self, self._handle.set_signal_val_long, set_action, value)
+                return
+            # handles cases where truncation must occur and where fast case can't be used
+            value = BinaryValue(
+                value=value,
+                n_bits=width,
+                bigEndian=False,
+                binaryRepresentation=(
+                    BinaryRepresentation.TWOS_COMPLEMENT if value < 0 else BinaryRepresentation.UNSIGNED))
+        elif isinstance(value, ctypes.Structure):
             value = BinaryValue(value=cocotb.utils.pack(value), n_bits=len(self))
-        elif isinstance(value, int):
-            value = BinaryValue(value=value, n_bits=len(self), bigEndian=False)
         elif isinstance(value, dict):
             # We're given a dictionary with a list of values and a bit size...
             num = 0
