@@ -143,3 +143,38 @@ async def test_access_underscore_name(dut):
     dut._id("_underscore_name", extended=False) <= 0
     await Timer(1, 'ns')
     assert dut._id("_underscore_name", extended=False).value == 0
+
+
+@cocotb.test()
+async def test_ints_to_wide_vectors(dut):
+    """
+    Test writing integer values to a wide data signal
+    """
+
+    async def write_and_check(value):
+        dut.stream_in_data_wide <= value
+        await Timer(1)
+        assert dut.stream_in_data_wide.value == value
+
+    await write_and_check(1)        # positive less than 2**31 - 1
+    await write_and_check(-1)       # negative more than -2**32
+    await write_and_check(2**40)    # positive more than 2**31 - 1
+    await write_and_check(-2**40)   # negative less than -2**31
+
+
+@cocotb.test()
+async def test_truncating_writes(dut):
+    """
+    Test writing integer values wider than signal cause truncation messages
+    """
+
+    async def write_and_check(signal, value):
+        signal <= value
+        await Timer(10)
+        expected = value & (2**len(signal) - 1)
+        assert signal.value == expected
+
+    await write_and_check(dut.stream_in_data, 0xFABDAD)
+    await write_and_check(dut.stream_in_data, -1)
+    await write_and_check(dut.stream_in_data_wide, (2**64 + 123))
+    await write_and_check(dut.stream_in_data_wide, (-2**64 - 456))
