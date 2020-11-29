@@ -698,6 +698,11 @@ class ModifiableObject(NonConstantObject):
         Raises:
             TypeError: If target is not wide enough or has an unsupported type
                  for value assignment.
+
+        .. deprecated:: 1.5
+            :class:`dict` objects are no longer accepted as values for assignment.
+            Convert the dictionary to an integer before assignment using
+            ``sum(v << (d['bits'] * i) for i, v in enumerate(d['values']))``.
         """
         value, set_action = self._check_for_set_action(value)
 
@@ -709,6 +714,11 @@ class ModifiableObject(NonConstantObject):
         elif isinstance(value, int):
             value = BinaryValue(value=value, n_bits=len(self), bigEndian=False)
         elif isinstance(value, dict):
+            warnings.warn(
+                "dict values are no longer accepted for value assignment. "
+                "Use `sum(v << (d['bits'] * i) for i, v in enumerate(d['values']))` "
+                "to convert the dict to an int before assignment.",
+                DeprecationWarning, stacklevel=3)
             # We're given a dictionary with a list of values and a bit size...
             num = 0
             vallist = list(value["values"])

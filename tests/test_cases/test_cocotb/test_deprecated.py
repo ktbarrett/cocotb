@@ -2,6 +2,8 @@
 # Licensed under the Revised BSD License, see LICENSE for details.
 # SPDX-License-Identifier: BSD-3-Clause
 import cocotb
+import cocotb.utils
+from cocotb.triggers import Timer
 import warnings
 from contextlib import contextmanager
 from common import assert_raises
@@ -106,3 +108,17 @@ async def test_handle_compat_mapping(dut):
     with assert_deprecated():
         dut.fullname = "myfullname"
     assert dut.fullname == "myfullname"
+
+
+@cocotb.test()
+async def test_dict_signal_assignment_deprecated(dut):
+    """Assigning a dict to a ModifiableObject signal is deprecated"""
+
+    d = dict(values=[0xC, 0x5], bits=4)
+
+    with assert_deprecated():
+        dut.stream_in_data <= d
+
+    await Timer(1, 'step')
+
+    assert dut.stream_in_data.value == cocotb.utils.pack_bit_vector(**d)

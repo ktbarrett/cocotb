@@ -36,6 +36,7 @@ import traceback
 import weakref
 import functools
 import warnings
+from typing import List
 
 from cocotb import simulator
 
@@ -630,3 +631,12 @@ def extract_coro_stack(coro, limit=None):
     whitespace stripped; if the source is not available it is ``None``.
     """
     return traceback.StackSummary.extract(walk_coro_stack(coro), limit=limit)
+
+
+def pack_bit_vector(values: List[int], bits: int):
+    """Pack the integers in `values` into a single integer, with each entry occupying `bits` bits.
+
+    >>> pack_bit_vector([0x012, 0x234, 0x456], bits=12) == 0x456234012
+    True
+    """
+    return sum(v << (bits * i) for i, v in enumerate(values))
