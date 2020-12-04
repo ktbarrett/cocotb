@@ -37,8 +37,10 @@ import threading
 import random
 import time
 import warnings
+import importlib
 from typing import Dict, List, Union
 from collections.abc import Coroutine
+from functools import reduce
 
 import cocotb.handle
 import cocotb.log
@@ -222,9 +224,6 @@ def _initialise_testbench(argv_):
 
     process_plusargs()
 
-    global scheduler
-    scheduler = Scheduler()
-
     # Seed the Python random number generator to make this repeatable
     global RANDOM_SEED
     RANDOM_SEED = os.getenv('RANDOM_SEED')
@@ -252,13 +251,38 @@ def _initialise_testbench(argv_):
     global top
     top = cocotb.handle.SimHandle(handle)
 
+    res = _load_entry()
+
+    _rlock.release()
+    return res
+
+
+def _default_entry():
+
+    global scheduler
+    scheduler = Scheduler()
+
     # start Regression Manager
     global regression_manager
     regression_manager = RegressionManager.from_discovery(top)
     regression_manager.execute()
 
-    _rlock.release()
     return True
+
+
+def _load_entry():
+    """Gather entry point information by parsing :envar:`COCOTB_ENTRY_POINT`."""
+    entry_point_str = os.environ.get("COCOTB_ENTRY_POINT", "cocotb:_default_entry")
+    try:
+        if ":" not in entry_point_str:
+            raise ValueError("Invalid COCOTB_ENTRY_POINT, missing entry function (no colon).")
+        entry_module_str, entry_func_str = entry_point_str.split(":", 1)
+        entry_module = importlib.import_module(entry_module_str)
+        entry_func = reduce(getattr, entry_func_str.split('.'), entry_module)
+    except Exception as e:
+        raise RuntimeError("Failure to parse COCOTB_ENTRY_POINT: '{}'".format(entry_point_str)) from e
+    else:
+        return entry_func()
 
 
 def _sim_event(level, message):
