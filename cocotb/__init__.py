@@ -41,7 +41,7 @@ from typing import Dict, List, Union
 from collections.abc import Coroutine
 
 import cocotb.handle
-import cocotb.log
+from cocotb.log import default_config, _log_from_c, _filter_from_c
 from cocotb.scheduler import Scheduler
 from cocotb.regression import RegressionManager
 from cocotb.decorators import RunningTask
@@ -73,7 +73,7 @@ def _setup_logging():
 
     # Don't set the logging up until we've attempted to fix the standard IO,
     # otherwise it will end up connected to the unfixed IO.
-    cocotb.log.default_config()
+    default_config()
     log = logging.getLogger(__name__)
 
     # we can't log these things until the logging is set up!
@@ -209,7 +209,7 @@ def _initialise_testbench(argv_):
     SIM_NAME = simulator.get_simulator_product().strip()
     SIM_VERSION = simulator.get_simulator_version().strip()
 
-    cocotb.log.info("Running on {} version {}".format(SIM_NAME, SIM_VERSION))
+    log.info("Running on {} version {}".format(SIM_NAME, SIM_VERSION))
 
     memcheck_port = os.getenv('MEMCHECK')
     if memcheck_port is not None:
