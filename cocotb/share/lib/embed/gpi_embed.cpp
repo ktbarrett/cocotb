@@ -34,6 +34,7 @@
 #include "embed.h"
 #include "locale.h"
 #include <cassert>
+#include <exports.h>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -111,21 +112,10 @@ static void set_program_name_in_venv(void)
  * Stores the thread state for cocotb in static variable gtstate
  */
 
-extern "C" void embed_init_python(void)
+extern "C" COCOTB_EXPORT void _embed_init_python(void)
 {
 
-#ifndef PYTHON_SO_LIB
-#error "Python version needs passing in with -DPYTHON_SO_LIB=libpython<ver>.so"
-#else
-#define PY_SO_LIB xstr(PYTHON_SO_LIB)
-#endif
-
     assert(!gtstate);  // this function should not be called twice
-
-    void * lib_handle = utils_dyn_open(PY_SO_LIB);
-    if (!lib_handle) {
-        LOG_ERROR("Failed to find Python shared library");
-    }
 
     to_python();
     set_program_name_in_venv();
@@ -171,7 +161,7 @@ extern "C" void embed_init_python(void)
  *
  * Cleans up reference counts for Python objects and calls Py_Finalize function.
  */
-extern "C" void embed_sim_cleanup(void)
+extern "C" COCOTB_EXPORT void _embed_sim_cleanup(void)
 {
     // If initialization fails, this may be called twice:
     // Before the initial callback returns and in the final callback.
@@ -216,7 +206,7 @@ static int get_module_ref(const char *modname, PyObject **mod)
     return 0;
 }
 
-extern "C" int embed_sim_init(int argc, char const * const * argv)
+extern "C" COCOTB_EXPORT int _embed_sim_init(int argc, char const * const * argv)
 {
 
     int i;
@@ -329,7 +319,7 @@ ok:
     return ret;
 }
 
-extern "C" void embed_sim_event(gpi_event_t level, const char *msg)
+extern "C" COCOTB_EXPORT void _embed_sim_event(gpi_event_t level, const char *msg)
 {
     /* Indicate to the upper layer a sim event occurred */
 
