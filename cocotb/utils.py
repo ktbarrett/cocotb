@@ -38,6 +38,7 @@ import functools
 import warnings
 
 from cocotb import simulator
+from cocotb._py_compat import cache
 
 
 def _get_simulator_precision():
@@ -139,6 +140,7 @@ def get_sim_steps(time, units="step"):
     return int(result_rounded)
 
 
+@cache
 def _get_log_time_scale(units):
     """Retrieves the ``log10()`` of the scale factor for a given time unit.
 

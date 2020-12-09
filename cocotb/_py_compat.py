@@ -60,3 +60,12 @@ if sys.version_info[:2] >= (3, 7):
 else:
     import collections
     insertion_ordered_dict = collections.OrderedDict
+
+
+if sys.version_info < (3, 9):
+    from functools import lru_cache
+
+    def cache(func):
+        return lru_cache(maxsize=None)(func)
+else:
+    from functools import cache
