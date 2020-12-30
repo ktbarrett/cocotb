@@ -140,34 +140,26 @@ long FliValueObjHdl::get_signal_value_long()
     return -1;
 }
 
-int FliValueObjHdl::set_signal_value(long value, gpi_set_action_t action)
+int FliValueObjHdl::set_signal_value(long, gpi_set_action_t)
 {
-    COCOTB_UNUSED(value);
-    COCOTB_UNUSED(action);
     LOG_ERROR("Setting signal/variable value via long not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
-int FliValueObjHdl::set_signal_value_binstr(std::string &value, gpi_set_action_t action)
+int FliValueObjHdl::set_signal_value_binstr(std::string &, gpi_set_action_t)
 {
-    COCOTB_UNUSED(value);
-    COCOTB_UNUSED(action);
     LOG_ERROR("Setting signal/variable value via string not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
-int FliValueObjHdl::set_signal_value_str(std::string &value, gpi_set_action_t action)
+int FliValueObjHdl::set_signal_value_str(std::string &, gpi_set_action_t)
 {
-    COCOTB_UNUSED(value);
-    COCOTB_UNUSED(action);
     LOG_ERROR("Setting signal/variable value via string not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }
 
-int FliValueObjHdl::set_signal_value(double value, gpi_set_action_t action)
+int FliValueObjHdl::set_signal_value(double, gpi_set_action_t)
 {
-    COCOTB_UNUSED(value);
-    COCOTB_UNUSED(action);
     LOG_ERROR("Setting signal/variable value via double not supported for %s of type %d", m_fullname.c_str(), m_type);
     return -1;
 }

@@ -441,12 +441,6 @@ extern GPI_EXPORT void* utils_dyn_open(const char* lib_name);
  */
 extern GPI_EXPORT void* utils_dyn_sym(void *handle, const char* sym_name);
 
-/** Marks a parameter as unused
-
-    @deprecated
- */
-#define COCOTB_UNUSED(x) ((void)x)
-
 #ifdef __cplusplus
 }
 #endif
