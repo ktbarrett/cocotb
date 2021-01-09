@@ -44,10 +44,6 @@ Interacting with the Simulator
     :member-order: bysource
     :exclude-members: get_value, get_buff, get_binstr, get_value_signed
 
-.. autoclass:: cocotb.bus.Bus
-    :members:
-    :member-order: bysource
-
 .. autofunction:: cocotb.fork
 
 .. autofunction:: cocotb.decorators.RunningTask.join
@@ -77,27 +73,34 @@ classes used within ``cocotb``.
 Testbench Structure
 ===================
 
+Bus
+---
+
+.. autoclass:: cocotb_bus.bus.Bus
+    :members:
+    :member-order: bysource
+
 Driver
 ------
 
-.. autoclass:: cocotb.drivers.Driver
+.. autoclass:: cocotb_bus.drivers.Driver
     :members:
     :member-order: bysource
     :private-members:
 
-.. autoclass:: cocotb.drivers.BitDriver
-    :members:
-    :member-order: bysource
-    :show-inheritance:
-    :private-members:
-
-.. autoclass:: cocotb.drivers.BusDriver
+.. autoclass:: cocotb_bus.drivers.BitDriver
     :members:
     :member-order: bysource
     :show-inheritance:
     :private-members:
 
-.. autoclass:: cocotb.drivers.ValidatedBusDriver
+.. autoclass:: cocotb_bus.drivers.BusDriver
+    :members:
+    :member-order: bysource
+    :show-inheritance:
+    :private-members:
+
+.. autoclass:: cocotb_bus.drivers.ValidatedBusDriver
     :members:
     :member-order: bysource
     :show-inheritance:
@@ -106,14 +109,12 @@ Driver
 Monitor
 -------
 
-.. currentmodule:: cocotb.monitors
-
-.. autoclass:: Monitor
+.. autoclass:: cocotb_bus.monitors.Monitor
     :members:
     :member-order: bysource
     :private-members:
 
-.. autoclass:: BusMonitor
+.. autoclass:: cocotb_bus.monitors.BusMonitor
     :members:
     :member-order: bysource
     :show-inheritance:
@@ -122,9 +123,7 @@ Monitor
 Scoreboard
 ----------
 
-.. currentmodule:: cocotb.scoreboard
-
-.. automodule:: cocotb.scoreboard
+.. automodule:: cocotb_bus.scoreboard
     :members:
     :member-order: bysource
     :show-inheritance:
@@ -132,8 +131,6 @@ Scoreboard
 
 Generators
 ----------
-
-.. currentmodule:: cocotb.generators
 
 .. automodule:: cocotb.generators
     :members:
@@ -261,7 +258,7 @@ AMBA
 
 Advanced Microcontroller Bus Architecture.
 
-.. currentmodule:: cocotb.drivers.amba
+.. currentmodule:: cocotb_bus.drivers.amba
 
 .. autoclass:: AXI4Master
     :members:
@@ -279,7 +276,7 @@ Advanced Microcontroller Bus Architecture.
 Avalon
 ^^^^^^
 
-.. currentmodule:: cocotb.drivers.avalon
+.. currentmodule:: cocotb_bus.drivers.avalon
 
 .. autoclass:: AvalonMM
     :members:
@@ -310,7 +307,7 @@ Avalon
 OPB
 ^^^
 
-.. currentmodule:: cocotb.drivers.opb
+.. currentmodule:: cocotb_bus.drivers.opb
 
 .. autoclass:: OPBMaster
     :members:
@@ -321,7 +318,7 @@ OPB
 XGMII
 ^^^^^
 
-.. currentmodule:: cocotb.drivers.xgmii
+.. currentmodule:: cocotb_bus.drivers.xgmii
 
 .. autoclass:: XGMII
     :members:
@@ -334,7 +331,7 @@ Monitors
 Avalon
 ^^^^^^
 
-.. currentmodule:: cocotb.monitors.avalon
+.. currentmodule:: cocotb_bus.monitors.avalon
 
 .. autoclass:: AvalonST
     :members:
@@ -349,7 +346,7 @@ Avalon
 XGMII
 ^^^^^
 
-.. autoclass:: cocotb.monitors.xgmii.XGMII
+.. autoclass:: cocotb_bus.monitors.xgmii.XGMII
     :members:
     :member-order: bysource
     :show-inheritance:

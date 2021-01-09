@@ -12,3 +12,4 @@ sphinx-argparse
 towncrier
 IPython
 sphinx-tabs
+cocotb-bus
