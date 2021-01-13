@@ -158,7 +158,6 @@ void gpi_embed_event(gpi_event_t level, const char *msg)
 
 static void gpi_load_libs(std::vector<std::string> to_load)
 {
-#define DOT_LIB_EXT "." xstr(LIB_EXT)
     std::vector<std::string>::iterator iter;
 
     for (iter = to_load.begin();
@@ -168,24 +167,19 @@ static void gpi_load_libs(std::vector<std::string> to_load)
 
         std::string arg = *iter;
 
-        std::string lib_name;
-        std::string func_name;
-        auto it = std::find(arg.begin(), arg.end(), ':');
-        bool const has_colon = it == arg.end();
-        if (has_colon) {
-            // no colon in the string, default
-            lib_name = arg;
-            func_name = arg + "_entry_point";
-        }
-        else {
-            lib_name = std::string(arg.begin(), it);
-            func_name = std::string(it+1, arg.end());
+        auto const it = std::rfind(arg.begin(), arg.end(), ':');  // find from right since path could contain colons (Windows)
+        if (it == arg.end()) {
+            // no colon in the string
+            printf("cocotb: Error parsing GPI_EXTRA %s\n", arg.c_str());
+            exit(1);
         }
 
-        std::string full_name = "lib" + lib_name + DOT_LIB_EXT;
-        void *lib_handle = utils_dyn_open(full_name.c_str());
+        std::string const lib_name {arg.begin(), it};
+        std::string const func_name {it+1, arg.end()};
+
+        void *lib_handle = utils_dyn_open(lib_name.c_str());
         if (!lib_handle) {
-            printf("cocotb: Error loading shared library %s\n", full_name.c_str());
+            printf("cocotb: Error loading shared library %s\n", lib_name.c_str());
             exit(1);
         }
 
@@ -193,7 +187,7 @@ static void gpi_load_libs(std::vector<std::string> to_load)
         if (!entry_point) {
             char const* fmt = "cocotb: Unable to find entry point %s for shared library %s\n%s";
             char const* msg = "        Perhaps you meant to use `,` instead of `:` to separate library names, as this changed in cocotb 1.4?\n";
-            printf(fmt, func_name.c_str(), full_name.c_str(), has_colon ? msg : "");
+            printf(fmt, func_name.c_str(), lib_name.c_str(), msg);
             exit(1);
         }
 
