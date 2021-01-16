@@ -7,8 +7,8 @@ Build options and Environment Variables
 Make System
 ===========
 
-Makefiles are provided for a variety of simulators in :file:`cocotb/share/makefiles/simulators`.
-The common Makefile :file:`cocotb/share/makefiles/Makefile.sim` includes the appropriate simulator Makefile based on the contents of the :make:var:`SIM` variable.
+Makefiles are provided for a variety of simulators in :file:`src/cocotb/share/makefiles/simulators`.
+The common Makefile :file:`src/cocotb/share/makefiles/Makefile.sim` includes the appropriate simulator Makefile based on the contents of the :make:var:`SIM` variable.
 
 Make Targets
 ------------
@@ -215,7 +215,7 @@ Makefile-based Test Scripts
 
 .. make:var:: SIM
 
-      Selects which simulator Makefile to use.  Attempts to include a simulator specific makefile from :file:`cocotb/share/makefiles/simulators/makefile.$(SIM)`
+      Selects which simulator Makefile to use.  Attempts to include a simulator specific makefile from :file:`src/cocotb/share/makefiles/simulators/makefile.$(SIM)`
 
 .. make:var:: WAVES
 

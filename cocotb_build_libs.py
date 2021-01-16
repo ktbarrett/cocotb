@@ -18,7 +18,7 @@ from typing import List
 
 
 logger = logging.getLogger(__name__)
-cocotb_share_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "cocotb", "share"))
+cocotb_share_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "cocotb", "share"))
 
 
 def create_sxs_assembly_manifest(name: str, filename: str, libraries: List[str], dependency_only=False) -> str:

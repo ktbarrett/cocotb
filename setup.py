@@ -69,7 +69,7 @@ def package_files(directory):
     paths = []
     for (fpath, directories, filenames) in walk(directory):
         for filename in filenames:
-            paths.append(path.join('..', fpath, filename))
+            paths.append(path.join('..', '..', fpath, filename))
     return paths
 
 
@@ -85,7 +85,7 @@ setup(
     name='cocotb',
     cmdclass={'build_ext': build_ext},
     use_scm_version=dict(
-        write_to='cocotb/_version.py',
+        write_to='src/cocotb/_version.py',
         write_to_template='__version__ = {version!r}',
         version_scheme='release-branch-semver'
     ),
@@ -100,13 +100,14 @@ setup(
     setup_requires=['setuptools_scm'],
     install_requires=[],
     python_requires='>=3.5',
-    packages=find_packages(),
+    packages=find_packages(where='src'),
+    package_dir={'': 'src'},
     package_data={
         'cocotb': (
-            package_files('cocotb/share/makefiles') +   # noqa: W504
-            package_files('cocotb/share/include') +     # noqa: W504
-            package_files('cocotb/share/def') +         # noqa: W504
-            package_files('cocotb/share/lib/verilator')
+            package_files('src/cocotb/share/makefiles') +   # noqa: W504
+            package_files('src/cocotb/share/include') +     # noqa: W504
+            package_files('src/cocotb/share/def') +         # noqa: W504
+            package_files('src/cocotb/share/lib/verilator')
         )
     },
     ext_modules=get_ext(),
