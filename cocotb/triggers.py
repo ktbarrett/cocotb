@@ -739,6 +739,36 @@ class Waitable(Awaitable):
         return self._wait().__await__()
 
 
+import typing
+
+T = typing.TypeVar("T")
+
+
+class Signal(Waitable, typing.Generic[T]):
+
+    def __init__(self, init: T) -> None:
+        self._value = init
+        self._pending: typing.List[Trigger] = []
+
+    @property
+    def value(self) -> T:
+        return self._value
+
+    @value.setter
+    def value(self, new_value: T) -> None:
+        self._value = new_value
+        pending = self._pending[:]
+        for trigger in pending:
+            trigger()
+
+    def _prime_trigger(self, trigger, callback):
+        self._pending.append(trigger)
+
+    async def _wait(self):
+        await _Event(self)
+        return self
+
+
 class _AggregateWaitable(Waitable):
     """
     Base class for Waitables that take mutiple triggers in their constructor

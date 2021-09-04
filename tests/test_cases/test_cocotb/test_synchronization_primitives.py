@@ -5,7 +5,7 @@
 Tests for synchronization primitives like Lock and Event
 """
 import cocotb
-from cocotb.triggers import Lock, Timer, _InternalEvent
+from cocotb.triggers import Lock, Timer, _InternalEvent, Signal
 from cocotb.utils import get_sim_time
 
 from common import assert_raises
@@ -107,3 +107,22 @@ async def test_internalevent(dut):
     time_ns = get_sim_time(units='ns')
     await e
     assert get_sim_time(units='ns') == time_ns
+
+
+@cocotb.test()
+async def test_signal(_):
+
+    s = Signal[int](0)
+
+    async def watcher():
+        sig = await s
+        assert sig.value == 123
+        sig = await s
+        assert sig.value == 818
+    await cocotb.start(watcher())
+
+    await Timer(10, 'ns')
+    s.value = 123
+    await Timer(10, 'ns')
+    s.value = 567
+    s.value = 818
