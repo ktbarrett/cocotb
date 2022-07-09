@@ -809,7 +809,8 @@ long VhpiSignalObjHdl::get_signal_value_long() {
     return static_cast<int32_t>(value.value.intg);
 }
 
-GpiCbHdl *VhpiSignalObjHdl::value_change_cb(int edge) {
+GpiCbHdl *VhpiSignalObjHdl::register_value_change_callback(
+    int edge, int (*function)(void *), void *cb_data) {
     VhpiValueCbHdl *cb = NULL;
 
     switch (edge) {
@@ -826,6 +827,7 @@ GpiCbHdl *VhpiSignalObjHdl::value_change_cb(int edge) {
             return NULL;
     }
 
+    cb->set_user_data(function, cb_data);
     if (cb->arm_callback()) {
         return NULL;
     }
@@ -835,7 +837,10 @@ GpiCbHdl *VhpiSignalObjHdl::value_change_cb(int edge) {
 
 VhpiValueCbHdl::VhpiValueCbHdl(GpiImplInterface *impl, VhpiSignalObjHdl *sig,
                                int edge)
-    : GpiCbHdl(impl), VhpiCbHdl(impl), GpiValueCbHdl(impl, sig, edge) {
+    : GpiCbHdl(impl),
+      GpiCommonCbHdl(impl),
+      VhpiCbHdl(impl),
+      GpiValueCbHdl(impl, sig, edge) {
     cb_data.reason = vhpiCbValueChange;
     cb_data.time = &vhpi_time;
     cb_data.obj = m_signal->get_handle<vhpiHandleT>();
@@ -889,7 +894,7 @@ int VhpiShutdownCbHdl::run_callback() {
 }
 
 VhpiTimedCbHdl::VhpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
-    : GpiCbHdl(impl), VhpiCbHdl(impl) {
+    : GpiCbHdl(impl), VhpiCommonCbHdl(impl) {
     vhpi_time.high = (uint32_t)(time >> 32);
     vhpi_time.low = (uint32_t)(time);
 
@@ -907,20 +912,20 @@ int VhpiTimedCbHdl::cleanup_callback() {
     return 1;
 }
 
-VhpiReadwriteCbHdl::VhpiReadwriteCbHdl(GpiImplInterface *impl)
-    : GpiCbHdl(impl), VhpiCbHdl(impl) {
+VhpiReadWriteCbHdl::VhpiReadWriteCbHdl(GpiImplInterface *impl)
+    : GpiCbHdl(impl), VhpiCommonCbHdl(impl) {
     cb_data.reason = vhpiCbRepLastKnownDeltaCycle;
     cb_data.time = &vhpi_time;
 }
 
 VhpiReadOnlyCbHdl::VhpiReadOnlyCbHdl(GpiImplInterface *impl)
-    : GpiCbHdl(impl), VhpiCbHdl(impl) {
+    : GpiCbHdl(impl), VhpiCommonCbHdl(impl) {
     cb_data.reason = vhpiCbRepEndOfTimeStep;
     cb_data.time = &vhpi_time;
 }
 
 VhpiNextPhaseCbHdl::VhpiNextPhaseCbHdl(GpiImplInterface *impl)
-    : GpiCbHdl(impl), VhpiCbHdl(impl) {
+    : GpiCbHdl(impl), VhpiCommonCbHdl(impl) {
     cb_data.reason = vhpiCbRepNextTimeStep;
     cb_data.time = &vhpi_time;
 }

@@ -413,7 +413,8 @@ int VpiSignalObjHdl::set_signal_value(s_vpi_value value_s,
     return 0;
 }
 
-GpiCbHdl *VpiSignalObjHdl::value_change_cb(int edge) {
+GpiCbHdl *VpiSignalObjHdl::register_value_change_callback(
+    int edge, int (*function)(void *), void *cb_data) {
     VpiValueCbHdl *cb = NULL;
 
     switch (edge) {
@@ -430,6 +431,7 @@ GpiCbHdl *VpiSignalObjHdl::value_change_cb(int edge) {
             return NULL;
     }
 
+    cb->set_user_data(function, cb_data);
     if (cb->arm_callback()) {
         return NULL;
     }
@@ -439,7 +441,10 @@ GpiCbHdl *VpiSignalObjHdl::value_change_cb(int edge) {
 
 VpiValueCbHdl::VpiValueCbHdl(GpiImplInterface *impl, VpiSignalObjHdl *sig,
                              int edge)
-    : GpiCbHdl(impl), VpiCbHdl(impl), GpiValueCbHdl(impl, sig, edge) {
+    : GpiCbHdl(impl),
+      GpiCommonCbHdl(impl),
+      VpiCbHdl(impl),
+      GpiValueCbHdl(impl, sig, edge) {
     vpi_time.type = vpiSuppressTime;
     m_vpi_value.format = vpiIntVal;
 
@@ -501,7 +506,7 @@ int VpiShutdownCbHdl::run_callback() {
 }
 
 VpiTimedCbHdl::VpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
-    : GpiCbHdl(impl), VpiCbHdl(impl) {
+    : GpiCbHdl(impl), VpiCommonCbHdl(impl) {
     vpi_time.high = (uint32_t)(time >> 32);
     vpi_time.low = (uint32_t)(time);
     vpi_time.type = vpiSimTime;
@@ -528,18 +533,18 @@ int VpiTimedCbHdl::cleanup_callback() {
     return 1;
 }
 
-VpiReadwriteCbHdl::VpiReadwriteCbHdl(GpiImplInterface *impl)
-    : GpiCbHdl(impl), VpiCbHdl(impl) {
+VpiReadWriteCbHdl::VpiReadWriteCbHdl(GpiImplInterface *impl)
+    : GpiCbHdl(impl), VpiCommonCbHdl(impl) {
     cb_data.reason = cbReadWriteSynch;
 }
 
 VpiReadOnlyCbHdl::VpiReadOnlyCbHdl(GpiImplInterface *impl)
-    : GpiCbHdl(impl), VpiCbHdl(impl) {
+    : GpiCbHdl(impl), VpiCommonCbHdl(impl) {
     cb_data.reason = cbReadOnlySynch;
 }
 
 VpiNextPhaseCbHdl::VpiNextPhaseCbHdl(GpiImplInterface *impl)
-    : GpiCbHdl(impl), VpiCbHdl(impl) {
+    : GpiCbHdl(impl), VpiCommonCbHdl(impl) {
     cb_data.reason = cbNextSimTime;
 }
 
