@@ -285,6 +285,14 @@ GPI_EXPORT void gpi_embed_end();
 GPI_EXPORT void gpi_entry_point();
 GPI_EXPORT void gpi_to_user();
 GPI_EXPORT void gpi_to_simulator();
+GPI_EXPORT [[noreturn]] void gpi_panic(char const *fmt, ...);
+GPI_EXPORT [[noreturn]] void gpi_vpanic(char const *fmt, va_list);
+
+#define UNREACHABLE()                             \
+    do {                                          \
+        LOG_CRITICAL("Reached unreachable code"); \
+        exit(1);                                  \
+    } while (0)
 
 typedef void (*layer_entry_func)();
 

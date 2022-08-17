@@ -629,8 +629,6 @@ extern "C" {
 int32_t handle_vpi_callback(p_cb_data cb_data) {
     gpi_to_user();
 
-    int rv = 0;
-
     VpiCbHdl *cb_hdl = (VpiCbHdl *)cb_data->user_data;
 
     if (!cb_hdl) {
@@ -639,30 +637,38 @@ int32_t handle_vpi_callback(p_cb_data cb_data) {
         return -1;
     }
 
-    gpi_cb_state_e old_state = cb_hdl->get_call_state();
+    switch (cb_hdl->get_call_state()) {
+        case GPI_PRIMED: {  // callback on PRIMED trigger occured, service
+                            // callback
+            // set state to CALL and call callback
+            cb_hdl->set_call_state(GPI_CALL);
+            cb_hdl->run_callback();
 
-    if (old_state == GPI_PRIMED) {
-        cb_hdl->set_call_state(GPI_CALL);
-        cb_hdl->run_callback();
-
-        gpi_cb_state_e new_state = cb_hdl->get_call_state();
-
-        /* We have re-primed in the handler */
-        if (new_state != GPI_PRIMED)
-            if (cb_hdl->cleanup_callback()) {
+            // If the trigger has not been re-PRIMED, clean it up
+            gpi_cb_state_e new_state = cb_hdl->get_call_state();
+            if (new_state != GPI_PRIMED) {
+                if (cb_hdl->cleanup_callback() == 1) {
+                    // FIXME handle errors
+                    delete cb_hdl;
+                }
+            }
+            break;
+        }
+        case GPI_DELETE:  // callback was deregistered by user, but simulator
+                          // still called callback
+            if (cb_hdl->cleanup_callback() == 1) {
+                // FIXME handle errors
                 delete cb_hdl;
             }
-
-    } else {
-        /* Issue #188: This is a work around for a modelsim */
-        if (cb_hdl->cleanup_callback()) {
-            delete cb_hdl;
-        }
+            break;
+        case GPI_FREE:
+        case GPI_CALL:
+            UNREACHABLE();
     }
 
     gpi_to_simulator();
 
-    return rv;
+    return 0;
 }
 
 static void register_impl() {

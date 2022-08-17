@@ -76,7 +76,7 @@ int VpiCbHdl::arm_callback() {
         return -1;
 
     } else {
-        m_state = GPI_PRIMED;
+        set_call_state(GPI_PRIMED);
     }
 
     m_obj_hdl = new_hdl;
@@ -85,38 +85,44 @@ int VpiCbHdl::arm_callback() {
 }
 
 int VpiCbHdl::cleanup_callback() {
-    if (m_state == GPI_FREE) return 0;
+    switch (m_state) {
+        case GPI_FREE:
+            return 0;  // don't free object
+        case GPI_PRIMED: {
+#ifdef MODELSIM
+            // For modelsim we don't try to deregister the callback; it doesn't
+            // work. Instead we set the callback to DELETE so when it does
+            // callback, it is squashed in handle_vpi_callback.
+            set_call_state(GPI_DELETE);
+            return 0;  // don't free object
+#else
+            if (!m_obj_hdl) {
+                LOG_ERROR("VPI: passed a NULL pointer");
+                return -1;
+            }
 
-    /* If the one-time callback has not come back then
-     * remove it, it is has then free it. The remove is done
-     * internally */
+            if (!(vpi_remove_cb(get_handle<vpiHandle>()))) {
+                LOG_ERROR("VPI: unable to remove callback");
+                return -1;
+            }
 
-    if (m_state == GPI_PRIMED) {
-        if (!m_obj_hdl) {
-            LOG_ERROR("VPI: passed a NULL pointer");
-            return -1;
-        }
-
-        if (!(vpi_remove_cb(get_handle<vpiHandle>()))) {
-            LOG_ERROR("VPI: unable to remove callback");
-            return -1;
-        }
-
-        check_vpi_error();
-    } else {
-#ifndef MODELSIM
-        /* This is disabled for now, causes a small leak going to put back in */
-        if (!(vpi_free_object(get_handle<vpiHandle>()))) {
-            LOG_ERROR("VPI: unable to free handle");
-            return -1;
-        }
+            check_vpi_error();
+            break;  // to free
 #endif
+        }
+        case GPI_CALL:
+        case GPI_DELETE:
+            break;  // to free
     }
 
+    // free VPI object
+    if (!(vpi_free_object(get_handle<vpiHandle>()))) {
+        LOG_ERROR("VPI: unable to free handle");
+        return -1;
+    }
     m_obj_hdl = NULL;
-    m_state = GPI_FREE;
-
-    return 0;
+    set_call_state(GPI_FREE);
+    return 0;  // don't free object
 }
 
 int VpiArrayObjHdl::initialise(std::string &name, std::string &fq_name) {
@@ -460,7 +466,7 @@ int VpiValueCbHdl::cleanup_callback() {
     }
 
     m_obj_hdl = NULL;
-    m_state = GPI_FREE;
+    set_call_state(GPI_FREE);
     return 0;
 }
 
@@ -510,22 +516,14 @@ VpiTimedCbHdl::VpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
 }
 
 int VpiTimedCbHdl::cleanup_callback() {
-    switch (m_state) {
-        case GPI_PRIMED:
-            /* Issue #188: Work around for modelsim that is harmless to others
-               too, we tag the time as delete, let it fire then do not pass up
-               */
-            LOG_DEBUG("Not removing PRIMED timer %d", vpi_time.low);
-            set_call_state(GPI_DELETE);
-            return 0;
-        case GPI_DELETE:
-            LOG_DEBUG("Removing DELETE timer %d", vpi_time.low);
-        default:
-            break;
+    if (m_state == GPI_FREE) {
+        return 0;  // don't free, already free
     }
-    VpiCbHdl::cleanup_callback();
-    /* Return one so we delete this object */
-    return 1;
+    int res = VpiCbHdl::cleanup_callback();
+    if (res < 0) {
+        return res;  // return error code
+    };
+    return 1;  // free object
 }
 
 VpiReadwriteCbHdl::VpiReadwriteCbHdl(GpiImplInterface *impl)
