@@ -38,6 +38,7 @@
 
 #include <cassert>
 #include <string>  // string
+#include <vector>  // vector
 
 #include "locale.h"
 
@@ -52,9 +53,6 @@
 #include <unistd.h>
 #endif
 static PyThreadState *gtstate = NULL;
-
-static wchar_t progname[] = L"cocotb";
-static wchar_t *argv[] = {progname};
 
 #if defined(_WIN32)
 #if defined(__MINGW32__) || defined(__CYGWIN32__)
@@ -114,7 +112,6 @@ extern "C" COCOTB_EXPORT void _embed_init_python(void) {
     // initialization can determine path from executable
     set_program_name();
     Py_Initialize(); /* Initialize the interpreter */
-    PySys_SetArgvEx(1, argv, 0);
 
     /* Swap out and return current thread state and release the GIL */
     gtstate = PyEval_SaveThread();
@@ -246,30 +243,22 @@ extern "C" COCOTB_EXPORT int _embed_sim_init(int argc,
     }
     // cocotb must hold _sim_event until _embed_sim_cleanup runs
 
-    // Build argv for cocotb module
-    auto argv_list = PyList_New(argc);
-    if (argv_list == NULL) {
-        // LCOV_EXCL_START
-        PyErr_Print();
-        return -1;
-        // LCOV_EXCL_STOP
-    }
-    for (int i = 0; i < argc; i++) {
-        // Decode, embedding non-decodable bytes using PEP-383. This can only
-        // fail with MemoryError or similar.
-        auto argv_item = PyUnicode_DecodeLocale(argv[i], "surrogateescape");
-        if (!argv_item) {
-            // LCOV_EXCL_START
-            PyErr_Print();
-            return -1;
-            // LCOV_EXCL_STOP
+    std::vector<wchar_t *> argv_wchar;
+    DEFER({
+        for (auto arg : argv_wchar) {
+            PyMem_RawFree(arg);
         }
-        PyList_SetItem(argv_list, i, argv_item);
+    })
+    for (int i = 0; i < argc; i++) {
+        auto arg = Py_DecodeLocale(argv[i], NULL);
+        if (arg == NULL) {
+            return -1;
+        }
+        argv_wchar.push_back(arg);
     }
-    DEFER(Py_DECREF(argv_list))
+    PySys_SetArgvEx((int)argv_wchar.size(), argv_wchar.data(), 0);
 
-    auto cocotb_retval =
-        PyObject_CallFunctionObjArgs(entry_point, argv_list, NULL);
+    auto cocotb_retval = PyObject_CallFunction(entry_point, NULL);
     if (!cocotb_retval) {
         // LCOV_EXCL_START
         PyErr_Print();
