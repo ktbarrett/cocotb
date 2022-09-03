@@ -680,8 +680,21 @@ static void register_final_callback() {
     sim_finish_cb->arm_callback();
 }
 
+static void vpi_gpi_entry_point()
+{
+    s_vpi_vlog_info info;
+
+    if (!vpi_get_vlog_info(&info)) {
+        LOG_WARN("Unable to get argv and argc from simulator");
+        info.argc = 0;
+        info.argv = nullptr;
+    }
+
+    gpi_entry_point(info.argc, info.argv);
+}
+
 COCOTBVPI_EXPORT void (*vlog_startup_routines[])() = {
-    register_impl, gpi_entry_point, register_initial_callback,
+    register_impl, vpi_gpi_entry_point, register_initial_callback,
     register_final_callback, nullptr};
 
 // For non-VPI compliant applications that cannot find vlog_startup_routines

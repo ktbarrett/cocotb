@@ -233,14 +233,14 @@ def _initialise_testbench(argv_):  # pragma: no cover
         _initialise_testbench_(argv_)
 
 
-def _initialise_testbench_(argv_):
+def _initialise_testbench_() -> None:
     # The body of this function is split in two because no coverage is collected on
     # the function that starts the coverage. By splitting it in two we get coverage
     # on most of the function.
 
     global argc, argv
-    argv = argv_
-    argc = len(argv)
+    argv = sys.argv
+    argc = len(sys.argv)
 
     root_name = os.getenv("TOPLEVEL")
     if root_name is not None:

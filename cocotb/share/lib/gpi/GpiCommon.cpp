@@ -119,8 +119,10 @@ int gpi_register_impl(GpiImplInterface *func_tbl) {
 
 bool gpi_has_registered_impl() { return registered_impls.size() > 0; }
 
-void gpi_embed_init(int argc, char const *const *argv) {
-    if (embed_sim_init(argc, argv)) gpi_embed_end();
+void gpi_embed_init() {
+    if (embed_sim_init()) {
+        gpi_embed_end();
+    }
 }
 
 void gpi_embed_end() {
@@ -179,7 +181,7 @@ static void gpi_load_libs(std::vector<std::string> to_load) {
     }
 }
 
-void gpi_entry_point() {
+void gpi_entry_point(int argc, char const * const *argv) {
     /* Lets look at what other libs we were asked to load too */
     char *lib_env = getenv("GPI_EXTRA");
 
@@ -203,7 +205,7 @@ void gpi_entry_point() {
     }
 
     /* Finally embed Python */
-    embed_init_python();
+    embed_init_python(argc, argv);
     gpi_print_registered_impl();
 }
 

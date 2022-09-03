@@ -30,10 +30,12 @@
 // Embed Python into the simulator using GPI
 
 #include <Python.h>
-#include <cocotb_utils.h>  // DEFER
-#include <exports.h>       // COCOTB_EXPORT
-#include <gpi.h>           // gpi_event_t
-#include <gpi_logging.h>   // LOG_* macros
+#include <vector>            // std::vector
+#include <string>            // std::string
+#include <cocotb_utils.h>    // DEFER
+#include <exports.h>         // COCOTB_EXPORT
+#include <gpi.h>             // gpi_event_t
+#include <gpi_logging.h>     // LOG_* macros
 #include <py_gpi_logging.h>  // py_gpi_logger_set_level, py_gpi_logger_initialize, py_gpi_logger_finalize
 
 #include <cassert>
@@ -50,26 +52,22 @@
 #else
 #include <unistd.h>
 #endif
-static PyThreadState *gtstate = NULL;
 
-static wchar_t progname[] = L"cocotb";
-static wchar_t *argv[] = {progname};
+static PyThreadState *gtstate = NULL;
 
 #if defined(_WIN32)
 #if defined(__MINGW32__) || defined(__CYGWIN32__)
-const char *PYTHON_INTERPRETER_PATH = "/Scripts/python";
+constexpr char *PYTHON_INTERPRETER_PATH = "/Scripts/python";
 #else
-const char *PYTHON_INTERPRETER_PATH = "\\Scripts\\python";
+constexpr char *PYTHON_INTERPRETER_PATH = "\\Scripts\\python";
 #endif
 #else
-const char *PYTHON_INTERPRETER_PATH = "/bin/python";
+constexpr char *PYTHON_INTERPRETER_PATH = "/bin/python";
 #endif
 
 static PyObject *pEventFn = NULL;
 
-static void set_program_name_in_venv(void) {
-    static char venv_path[PATH_MAX];
-    static wchar_t venv_path_w[PATH_MAX];
+static void set_program_name(void) {
 
     const char *venv_path_home = getenv("VIRTUAL_ENV");
     if (!venv_path_home) {
@@ -79,62 +77,25 @@ static void set_program_name_in_venv(void) {
         return;
     }
 
-    strncpy(venv_path, venv_path_home, sizeof(venv_path) - 1);
-    if (venv_path[sizeof(venv_path) - 1]) {
+    std::string venv_path = venv_path_home;
+    venv_path.append(PYTHON_INTERPRETER_PATH);
+
+    auto venv_path_w = Py_DecodeLocale(venv_path.c_str(), NULL);
+    if (venv_path_w == NULL) {
         LOG_ERROR(
             "Unable to set Python Program Name using virtual environment. "
-            "Path to virtual environment too long");
-        return;
-    }
-
-    strncat(venv_path, PYTHON_INTERPRETER_PATH,
-            sizeof(venv_path) - strlen(venv_path) - 1);
-    if (venv_path[sizeof(venv_path) - 1]) {
-        LOG_ERROR(
-            "Unable to set Python Program Name using virtual environment. "
-            "Path to interpreter too long");
-        return;
-    }
-
-    wcsncpy(venv_path_w, Py_DecodeLocale(venv_path, NULL),
-            sizeof(venv_path_w) / sizeof(wchar_t));
-
-    if (venv_path_w[(sizeof(venv_path_w) / sizeof(wchar_t)) - 1]) {
-        LOG_ERROR(
-            "Unable to set Python Program Name using virtual environment. "
-            "Path to interpreter too long");
-        return;
+            "Virtual environment path decoding error."
+        )
     }
 
     LOG_INFO("Using Python virtual environment interpreter at %ls",
              venv_path_w);
     Py_SetProgramName(venv_path_w);
+    PyMem_RawFree(venv_path_w);
 }
 
-/**
- * @name    Initialize the Python interpreter
- * @brief   Create and initialize the Python interpreter
- * @ingroup python_c_api
- *
- * GILState before calling: N/A
- *
- * GILState after calling: released
- *
- * Stores the thread state for cocotb in static variable gtstate
- */
-
-extern "C" COCOTB_EXPORT void _embed_init_python(void) {
-    assert(!gtstate);  // this function should not be called twice
-
-    to_python();
-    set_program_name_in_venv();
-    Py_Initialize(); /* Initialize the interpreter */
-    PySys_SetArgvEx(1, argv, 0);
-
-    /* Swap out and return current thread state and release the GIL */
-    gtstate = PyEval_SaveThread();
-    to_simulator();
-
+static void wait_for_attach(void)
+{
     /* Before returning we check if the user wants pause the simulator thread
        such that they can attach */
     const char *pause = getenv("COCOTB_ATTACH");
@@ -159,6 +120,37 @@ extern "C" COCOTB_EXPORT void _embed_init_python(void) {
         sleep((unsigned int)sleep_time);
     }
 }
+
+
+extern "C" COCOTB_EXPORT int _embed_init_python(int argc, char const * const *argv) {
+    assert(!gtstate);  // this function should not be called twice
+
+    // we need to set the program name before initialization so Py_Initialize can set up the path based on the executable
+    set_program_name();
+    Py_Initialize();
+
+    // set argv to the command argv once we have configured the interpreter
+    std::vector<wchar_t*> wchar_argv;
+    for (int i = 0; i < argc; i++) {
+        auto arg = Py_DecodeLocale(argv[i], NULL);
+        if (arg == NULL) {
+            return -1;
+        }
+        wchar_argv.push_back(arg);
+    }
+    PySys_SetArgvEx(wchar_argv.size(), wchar_argv.data(), 0);
+    for (auto arg : wchar_argv) {
+        PyMem_RawFree(arg);
+    }
+
+    // Swap out and return current thread state and release the GIL
+    gtstate = PyEval_SaveThread();
+
+    wait_for_attach();
+
+    return 0;
+}
+
 
 /**
  * @name    Simulator cleanup
@@ -188,8 +180,7 @@ extern "C" COCOTB_EXPORT void _embed_sim_cleanup(void) {
     }
 }
 
-extern "C" COCOTB_EXPORT int _embed_sim_init(int argc,
-                                             char const *const *argv) {
+extern "C" COCOTB_EXPORT int _embed_sim_init(void) {
     // Check that we are not already initialized
     if (pEventFn) {
         return 0;
@@ -261,30 +252,7 @@ extern "C" COCOTB_EXPORT int _embed_sim_init(int argc,
     }
     // cocotb must hold _sim_event until _embed_sim_cleanup runs
 
-    // Build argv for cocotb module
-    auto argv_list = PyList_New(argc);
-    if (argv_list == NULL) {
-        // LCOV_EXCL_START
-        PyErr_Print();
-        return -1;
-        // LCOV_EXCL_STOP
-    }
-    for (int i = 0; i < argc; i++) {
-        // Decode, embedding non-decodable bytes using PEP-383. This can only
-        // fail with MemoryError or similar.
-        auto argv_item = PyUnicode_DecodeLocale(argv[i], "surrogateescape");
-        if (!argv_item) {
-            // LCOV_EXCL_START
-            PyErr_Print();
-            return -1;
-            // LCOV_EXCL_STOP
-        }
-        PyList_SetItem(argv_list, i, argv_item);
-    }
-    DEFER(Py_DECREF(argv_list))
-
-    auto cocotb_retval =
-        PyObject_CallFunctionObjArgs(entry_point, argv_list, NULL);
+    auto cocotb_retval = PyObject_CallFunction(entry_point, NULL);
     if (!cocotb_retval) {
         // LCOV_EXCL_START
         PyErr_Print();

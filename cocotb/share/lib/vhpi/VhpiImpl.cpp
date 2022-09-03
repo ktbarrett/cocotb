@@ -27,8 +27,8 @@
 
 #include "VhpiImpl.h"
 
-#include <stdlib.h>
-
+#include <cstring>
+#include <cassert>
 #include <algorithm>
 #include <cmath>
 
@@ -1022,9 +1022,38 @@ static void register_impl() {
     gpi_register_impl(vhpi_table);
 }
 
+void vhpi_gpi_entry_point() {
+    vhpiHandleT tool, argv_iter, argv_hdl;
+    char **tool_argv = NULL;
+    int tool_argc = 0;
+    int i = 0;
+
+    tool = vhpi_handle(vhpiTool, NULL);
+    if (tool) {
+        tool_argc = static_cast<int>(vhpi_get(vhpiArgcP, tool));
+        tool_argv = new char *[tool_argc];
+        assert(tool_argv);
+
+        argv_iter = vhpi_iterator(vhpiArgvs, tool);
+        if (argv_iter) {
+            while ((argv_hdl = vhpi_scan(argv_iter))) {
+                tool_argv[i] = const_cast<char *>(static_cast<const char *>(
+                    vhpi_get_str(vhpiStrValP, argv_hdl)));
+                i++;
+            }
+            vhpi_release_handle(argv_iter);
+        }
+
+        vhpi_release_handle(tool);
+    }
+
+    gpi_entry_point(tool_argc, tool_argv);
+    delete[] tool_argv;
+}
+
 // pre-defined VHPI registration table
 COCOTBVHPI_EXPORT void (*vhpi_startup_routines[])() = {
-    register_impl, gpi_entry_point, register_initial_callback,
+    register_impl, vhpi_gpi_entry_point, register_initial_callback,
     register_final_callback, nullptr};
 
 // For non-VHPI compliant applications that cannot find vhpi_startup_routines

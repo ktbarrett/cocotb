@@ -477,16 +477,7 @@ VpiStartupCbHdl::VpiStartupCbHdl(GpiImplInterface *impl)
 }
 
 int VpiStartupCbHdl::run_callback() {
-    s_vpi_vlog_info info;
-
-    if (!vpi_get_vlog_info(&info)) {
-        LOG_WARN("Unable to get argv and argc from simulator");
-        info.argc = 0;
-        info.argv = nullptr;
-    }
-
-    gpi_embed_init(info.argc, info.argv);
-
+    gpi_embed_init();
     return 0;
 }
 
