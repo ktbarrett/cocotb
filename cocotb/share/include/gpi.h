@@ -248,6 +248,13 @@ GPI_EXPORT gpi_cb_hdl
 gpi_register_nexttime_callback(int (*gpi_function)(void *), void *gpi_cb_data);
 GPI_EXPORT gpi_cb_hdl
 gpi_register_readwrite_callback(int (*gpi_function)(void *), void *gpi_cb_data);
+GPI_EXPORT gpi_cb_hdl gpi_register_startup_callback(
+    int (*gpi_function)(void *, int argc, char const *const *argv),
+    void *gpi_cb_data);
+GPI_EXPORT gpi_cb_hdl gpi_register_shutdown_callback(
+    int (*gpi_function)(void *, char const *), void *gpi_cb_data);
+GPI_EXPORT gpi_cb_hdl gpi_register_cleanup_callback(int (*gpi_function)(void *),
+                                                    void *gpi_cb_data);
 
 // Calling convention is that 0 = success and negative numbers a failure
 // For implementers of GPI the provided macro GPI_RET(x) is provided

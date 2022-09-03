@@ -273,6 +273,13 @@ class GPI_EXPORT GpiImplInterface {
                                                  void *gpi_cb_data) = 0;
     virtual GpiCbHdl *register_readwrite_callback(int (*gpi_function)(void *),
                                                   void *gpi_cb_data) = 0;
+    virtual GpiCbHdl *register_startup_callback(
+        int (*gpi_function)(void *, int argc, char const *const *argv),
+        void *gpi_cb_data) = 0;
+    virtual GpiCbHdl *register_shutdown_callback(
+        int (*gpi_function)(void *, char const *), void *gpi_cb_data) = 0;
+    virtual GpiCbHdl *register_cleanup_callback(int (*gpi_function)(void *),
+                                                void *gpi_cb_data) = 0;
     virtual int deregister_callback(GpiCbHdl *obj_hdl) = 0;
 
     /* Method to provide strings from operation types */

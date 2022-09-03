@@ -584,6 +584,31 @@ gpi_cb_hdl gpi_register_readwrite_callback(int (*gpi_function)(void *),
     }
 }
 
+GPI_EXPORT gpi_cb_hdl gpi_register_startup_callback(
+    int (*gpi_function)(void *, int argc, char const *const *argv),
+    void *gpi_cb_data) {
+    // It should not matter which implementation we use for this so just pick
+    // the first one
+    return registered_impls[0]->register_startup_callback(gpi_function,
+                                                          gpi_cb_data);
+}
+
+GPI_EXPORT gpi_cb_hdl gpi_register_shutdown_callback(
+    int (*gpi_function)(void *, char const *), void *gpi_cb_data) {
+    // It should not matter which implementation we use for this so just pick
+    // the first one
+    return registered_impls[0]->register_shutdown_callback(gpi_function,
+                                                           gpi_cb_data);
+}
+
+GPI_EXPORT gpi_cb_hdl gpi_register_cleanup_callback(int (*gpi_function)(void *),
+                                                    void *gpi_cb_data) {
+    // It should not matter which implementation we use for this so just pick
+    // the first one
+    return registered_impls[0]->register_cleanup_callback(gpi_function,
+                                                          gpi_cb_data);
+}
+
 void gpi_deregister_callback(gpi_cb_hdl cb_hdl) {
     cb_hdl->m_impl->deregister_callback(cb_hdl);
 }
