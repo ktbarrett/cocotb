@@ -13,6 +13,8 @@ module runner #(
     output [`DEFINE-1:0] define_out
 );
 
+localparam string string_data = `DEFINE_STR;
+
 basic_hierarchy_module  basic_hierarchy_module(.clk(1'b0), .reset(1'b0));
 
 endmodule
