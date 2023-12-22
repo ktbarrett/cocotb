@@ -29,7 +29,7 @@ import enum
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from logging import Logger
-from typing import Any, Dict, Generic, Set, Tuple, TypeVar
+from typing import Any, Dict, Generic, Iterable, Set, Tuple, TypeVar
 
 import cocotb
 from cocotb import simulator
@@ -151,23 +151,57 @@ class SimHandleBase(ABC):
 IndexType = TypeVar("IndexType")
 
 
-class RegionObject(SimHandleBase, Generic[IndexType]):
-    """A region object, such as a scope or namespace.
+class RegionObjectBase(SimHandleBase, Generic[IndexType]):
+    """Base class for region objects.
 
     Region objects don't have values, they are effectively scopes or namespaces.
+    This includes array-like hierarchical structures like "generate loops"
+    and named hierarchical structures like "generate blocks" or "module"/"entity" instantiation.
+
+    Regions can be iterated over to discover all their child objects.
+
+    .. code-block:: python3
+
+        cocotb.log("Discovering all hierarchical children in 'some_module' instance")
+        for handle in dut.some_module:
+            cocotb.log("Found %r", handle)
     """
 
     @abstractmethod
-    def __init__(self, handle, path):
+    def __init__(self, handle: int, path: str) -> None:
         super().__init__(handle, path)
         self._sub_handles: Dict[IndexType, SimHandleBase] = {}
 
-    def __iter__(self):
-        """Iterate over all known objects in this layer of hierarchy."""
-        self._discover_all()
+    def _keys(self) -> Iterable[IndexType]:
+        """Iterate over the names or indexes of the child objects.
 
-        for name, handle in self._sub_handles.items():
-            yield handle
+        :meta public:
+        """
+        self._discover_all()
+        return self._sub_handles.keys()
+
+    def _values(self) -> Iterable[SimHandleBase]:
+        """Iterate over the child objects.
+
+        :meta public:
+        """
+        self._discover_all()
+        return self._sub_handles.keys()
+
+    def _items(self) -> Iterable[Tuple[IndexType, SimHandleBase]]:
+        """Iterate over the ``(name/index, object)`` tuple of child objects.
+
+        :meta public:
+        """
+        self._discover_all()
+        return self._sub_handles.items()
+
+    def __iter__(self) -> Iterable[SimHandleBase]:
+        return self._values()
+
+    def __len__(self) -> int:
+        self._discover_all()
+        return len(self._sub_handles)
 
     @lru_cache(maxsize=None)
     def _discover_all(self) -> None:
@@ -196,14 +230,17 @@ class RegionObject(SimHandleBase, Generic[IndexType]):
 
             self._sub_handles[key] = hdl
 
-    def _child_path(self, name) -> str:
+    @abstractmethod
+    def _child_path(self, name: str) -> str:
         """Return a string of the path of the child :any:`SimHandle` for a given *name*."""
-        delimiter = "::" if self._type == "GPI_PACKAGE" else "."
-        return self._path + delimiter + name
 
-    def _sub_handle_key(self, name):
-        """Translate the handle name to a key to use in :any:`_sub_handles` dictionary."""
-        return name.split(".")[-1]
+    @abstractmethod
+    def _sub_handle_key(self, name: str) -> IndexType:
+        """Translate the handle name to a key to use in :any:`_sub_handles` dictionary.
+
+        Raises:
+            ValueError: if unable to translate handle to a valid _sub_handle key
+        """
 
     def __dir__(self):
         """Permits IPython tab completion to work."""
@@ -211,12 +248,21 @@ class RegionObject(SimHandleBase, Generic[IndexType]):
         return super().__dir__() + [str(k) for k in self._sub_handles]
 
 
-class HierarchyObject(RegionObject[str]):
+class HierarchyObject(RegionObjectBase[str]):
     """Hierarchy objects are namespace/scope objects."""
 
     def __init__(self, handle, path) -> None:
         super().__init__(handle, path)
         self._invalid_sub_handles: Set[str] = set()
+
+    def _child_path(self, name: str) -> str:
+        """Return a string of the path of the child :any:`SimHandle` for a given *name*."""
+        delimiter = "::" if self._type == "GPI_PACKAGE" else "."
+        return self._path + delimiter + name
+
+    def _sub_handle_key(self, name: str) -> str:
+        """Translate the handle name to a key to use in :any:`_sub_handles` dictionary."""
+        return name.split(".")[-1]
 
     def __get_sub_handle_by_name(self, name):
         try:
@@ -286,7 +332,7 @@ class HierarchyObject(RegionObject[str]):
         raise AttributeError(f"{self._name} contains no object named {name}")
 
 
-class HierarchyArrayObject(RegionObject[int]):
+class HierarchyArrayObject(RegionObjectBase[int]):
     """Hierarchy Arrays are containers of Hierarchy Objects."""
 
     def __init__(self, handle, path) -> None:
@@ -312,11 +358,6 @@ class HierarchyArrayObject(RegionObject[int]):
             return int(result.group("index"))
         else:
             raise ValueError(f"Unable to match an index pattern: {name}")
-
-    @lru_cache(maxsize=None)
-    def __len__(self) -> int:
-        self._discover_all()
-        return len(self._sub_handles)
 
     def __getitem__(self, index):
         if isinstance(index, slice):
