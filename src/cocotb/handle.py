@@ -332,13 +332,26 @@ class HierarchyObject(RegionObjectBase[str]):
 
 
 class HierarchyArrayObject(RegionObjectBase[int]):
-    """Hierarchy Arrays are containers of Hierarchy Objects."""
+    """Arrays of hierarchy objects.
 
-    def __init__(self, handle, path) -> None:
+    This class is used for array-like hierarchical structures like "generate loops".
+
+    Children of this object are found by supplying a numerical index using index syntax.
+    For example, if you have a design with a generate loop ``gen_pipe_stages`` from the range ``0`` to ``7``:
+
+    .. code-block:: python3
+
+        @cocotb.test
+        async def test_get_gen_block(dut):
+            block_0 = dut.gen_pipe_stages[0]
+            block_7 = dut.gen_pipe_stages[7]
+
+    """
+
+    def __init__(self, handle: int, path: str) -> None:
         super().__init__(handle, path)
 
-    def _sub_handle_key(self, name):
-        """Translate the handle name to a key to use in :any:`_sub_handles` dictionary."""
+    def _sub_handle_key(self, name: str) -> int:
         # This is slightly hacky, but we need to extract the index from the name
         # See also GEN_IDX_SEP_* in VhpiImpl.h for the VHPI separators.
         #
@@ -358,7 +371,7 @@ class HierarchyArrayObject(RegionObjectBase[int]):
         else:
             raise ValueError(f"Unable to match an index pattern: {name}")
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: str) -> SimHandleBase:
         if isinstance(index, slice):
             raise IndexError("Slice indexing is not supported")
         if index in self._sub_handles:
@@ -370,13 +383,21 @@ class HierarchyArrayObject(RegionObjectBase[int]):
         self._sub_handles[index] = SimHandle(new_handle, path)
         return self._sub_handles[index]
 
-    def _child_path(self, name):
-        """Return a string of the path of the child :any:`SimHandle` for a given name."""
+    def _child_path(self, name: str) -> str:
         index = self._sub_handle_key(name)
         return self._path + "[" + str(index) + "]"
 
-    def __setitem__(self, index, value):
-        raise TypeError("Not permissible to set %s at index %d" % (self._name, index))
+    @cached_property
+    def _range(self) -> Tuple[int, int]:
+        return self._handle.get_range()
+
+    def left(self) -> int:
+        """Returns leftmost index in the array/vector."""
+        return self._range()[0]
+
+    def right(self) -> int:
+        """Returns rightmost index in the array/vector."""
+        return self._range()[1]
 
 
 class NonHierarchyObject(SimHandleBase):
