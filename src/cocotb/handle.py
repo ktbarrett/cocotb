@@ -29,7 +29,17 @@ import enum
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from logging import Logger
-from typing import Any, Callable, Dict, Generic, Iterable, Optional, Tuple, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+)
 
 import cocotb
 from cocotb import simulator
@@ -456,9 +466,11 @@ class ValueObjectBase(SimHandleBase, Generic[T]):
         """
 
 
-class NonHierarchyIndexableObjectBase(ValueObjectBase[T]):
+class ArrayObjectBase(ValueObjectBase[T]):
+    """Base class for all array-like value objects."""
+
     @abstractmethod
-    def __init__(self, handle, path):
+    def __init__(self, handle: int, path: str) -> None:
         super().__init__(handle, path)
         self._sub_handles: Dict[int, SimHandleBase] = {}
 
@@ -466,7 +478,15 @@ class NonHierarchyIndexableObjectBase(ValueObjectBase[T]):
     def _range(self) -> Tuple[int, int]:
         return self._handle.get_range()
 
-    def __getitem__(self, index):
+    @property
+    def left(self) -> int:
+        return self._range[0]
+
+    @property
+    def right(self) -> int:
+        return self._range[1]
+
+    def __getitem__(self, index: int) -> T:
         if isinstance(index, slice):
             raise IndexError("Slice indexing is not supported")
         if self._range is None:
@@ -480,7 +500,7 @@ class NonHierarchyIndexableObjectBase(ValueObjectBase[T]):
         self._sub_handles[index] = SimHandle(new_handle, path)
         return self._sub_handles[index]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[T]:
         if self._range is None:
             return
 
@@ -506,7 +526,7 @@ class NonHierarchyIndexableObjectBase(ValueObjectBase[T]):
         return self._handle.get_num_elems()
 
 
-class NonHierarchyIndexableObject(NonHierarchyIndexableObjectBase):
+class NonHierarchyIndexableObject(ArrayObjectBase[List[T]]):
     """A non-hierarchy indexable object.
 
     Getting and setting the current value of an array is done
@@ -627,7 +647,7 @@ class ModifiableObject(ValueObjectBase[T]):
         return value._as_gpi_args_for(self)
 
 
-class LogicObject(ModifiableObject, NonHierarchyIndexableObjectBase):
+class LogicObject(ModifiableObject, ArrayObjectBase):
     """Specific object handle for Verilog nets and regs and VHDL std_logic and std_logic_vectors"""
 
     def __init__(self, handle, path):
