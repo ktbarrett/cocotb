@@ -29,7 +29,7 @@ import enum
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from logging import Logger
-from typing import Any, Dict, Generic, Iterable, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Generic, Iterable, Optional, Tuple, TypeVar
 
 import cocotb
 from cocotb import simulator
@@ -400,11 +400,17 @@ class HierarchyArrayObject(RegionObjectBase[int]):
         return self._range()[1]
 
 
-class NonHierarchyObject(SimHandleBase):
-    """Common base class for all non-hierarchy objects."""
+T = TypeVar("T")
+
+
+class ValueObjectBase(SimHandleBase, Generic[T]):
+    """Base class for all objects that have value.
+
+    Value objects are expected to not have any named children objects.
+    """
 
     @property
-    def value(self):
+    def value(self) -> T:
         """The value of this simulation object.
 
         .. note::
@@ -418,12 +424,12 @@ class NonHierarchyObject(SimHandleBase):
         )
 
     @value.setter
-    def value(self, value):
+    def value(self, value: T) -> None:
         if self.is_const:
             raise TypeError(f"{self._path} is constant")
         self._set_value(value, cocotb.scheduler._schedule_write)
 
-    def setimmediatevalue(self, value):
+    def setimmediatevalue(self, value: T) -> None:
         """Assign a value to this simulation object immediately."""
         if self.is_const:
             raise TypeError(f"{self._path} is constant")
@@ -438,7 +444,8 @@ class NonHierarchyObject(SimHandleBase):
         """``True`` if the simulator object is immutable, e.g. a Verilog parameter or VHDL constant or generic."""
         return self._handle.get_const()
 
-    def _set_value(self, value, call_sim):
+    @abstractmethod
+    def _set_value(self, value: T, call_sim: Callable[..., None]):
         """This should be overriden in subclasses.
 
         This is used to implement both the setter for :attr:`value`, and the
@@ -447,12 +454,9 @@ class NonHierarchyObject(SimHandleBase):
         ``call_sim(handle, f, *args)`` should be used to schedule simulator writes,
         rather than performing them directly as ``f(*args)``.
         """
-        raise TypeError(
-            f"Not permissible to set values on object {self._name} of type {type(self)}"
-        )
 
 
-class NonHierarchyIndexableObjectBase(NonHierarchyObject):
+class NonHierarchyIndexableObjectBase(ValueObjectBase[T]):
     @abstractmethod
     def __init__(self, handle, path):
         super().__init__(handle, path)
@@ -530,7 +534,7 @@ class NonHierarchyIndexableObject(NonHierarchyIndexableObjectBase):
     def __init__(self, handle, path):
         super().__init__(handle, path)
 
-    @NonHierarchyObject.value.getter
+    @ValueObjectBase.value.getter
     def value(self) -> list:
         # Don't use self.__iter__, because it has an unwanted `except IndexError`
         return [self[i].value for i in self._range_iter(self._range[0], self._range[1])]
@@ -598,7 +602,7 @@ class Release(_SetAction):
         return 0, 2  # GPI_RELEASE
 
 
-class ModifiableObject(NonHierarchyObject):
+class ModifiableObject(ValueObjectBase[T]):
     """Base class for simulator objects whose values can be modified."""
 
     def drivers(self):
