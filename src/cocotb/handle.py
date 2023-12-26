@@ -29,10 +29,11 @@ import enum
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from logging import Logger
-from typing import Any, Dict, Generic, Iterable, Set, Tuple, TypeVar
+from typing import Any, Dict, Generic, Iterable, Optional, Tuple, TypeVar
 
 import cocotb
 from cocotb import simulator
+from cocotb._deprecation import deprecated
 from cocotb._py_compat import cached_property
 from cocotb.binary import BinaryRepresentation, BinaryValue
 from cocotb.log import SimLog
@@ -249,87 +250,85 @@ class RegionObjectBase(SimHandleBase, Generic[IndexType]):
 
 
 class HierarchyObject(RegionObjectBase[str]):
-    """Hierarchy objects are namespace/scope objects."""
+    """Namespace/scope objects.
 
-    def __init__(self, handle, path) -> None:
+    This class is used for named hierarchical structures, such as "generate blocks" or "module"/"entity" instantiations.
+
+    Children under this structure are found by using the name of the child with either the dot syntax or index syntax.
+    For example, if in your TOPLEVEL entity/module you have a signal/net named 'count', you could do either of the following.
+
+    .. code-block:: python3
+
+        @cocotb.test
+        async def test_dut(dut):
+            count_signal = dut.count
+            also_count_signal = dut["count"]
+
+    Dot syntax is usually shorter and easier to read, and is much more common.
+    However it has limitations:
+    - the name cannot start with a number
+    - the name cannot start with a '_' (this is used to passthrough Python attributes)
+    - the name can only contain ASCII letters, numbers, and the '_' character
+
+    Any possible name of an object is supported with the index syntax.
+    """
+
+    def __init__(self, handle: int, path: str) -> None:
         super().__init__(handle, path)
-        self._invalid_sub_handles: Set[str] = set()
 
     def _child_path(self, name: str) -> str:
-        """Return a string of the path of the child :any:`SimHandle` for a given *name*."""
         delimiter = "::" if self._type == "GPI_PACKAGE" else "."
         return self._path + delimiter + name
 
     def _sub_handle_key(self, name: str) -> str:
-        """Translate the handle name to a key to use in :any:`_sub_handles` dictionary."""
         return name.split(".")[-1]
 
-    def __get_sub_handle_by_name(self, name):
+    def __getitem__(self, name: str) -> Optional[SimHandleBase]:
         try:
             return self._sub_handles[name]
         except KeyError:
             pass
 
-        # Cache to avoid a call to the simulator if we already know the name is
-        # invalid. Unclear if we care, but we had this before.
-        if name in self._invalid_sub_handles:
-            return None
-
         new_handle = self._handle.get_handle_by_name(name)
-
         if not new_handle:
-            self._invalid_sub_handles.add(name)
-            return None
+            raise AttributeError(f"{self._name} contains no object named {name}")
 
         sub_handle = SimHandle(new_handle, self._child_path(name))
         self._sub_handles[name] = sub_handle
         return sub_handle
 
-    def __setattr__(self, name, value):
-        """Provide transparent access to signals via the hierarchy.
-
-        Slightly hacky version of operator overloading in Python.
-
-        Raise an :exc:`AttributeError` if users attempt to create new members which
-        don't exist in the design.
-        """
-
+    def __setattr__(self, name: str, value: Any) -> None:
         # private attributes pass through directly
         if name.startswith("_"):
             return object.__setattr__(self, name, value)
 
         raise AttributeError(f"{self._name} contains no object named {name}")
 
-    def __getattr__(self, name):
-        """Query the simulator for an object with the specified name
-        and cache the result to build a tree of objects.
-        """
+    def __getattr__(self, name: str) -> SimHandleBase:
         if name.startswith("_"):
             return object.__getattribute__(self, name)
 
-        handle = self.__get_sub_handle_by_name(name)
-        if handle is not None:
-            return handle
+        return self[name]
 
-        raise AttributeError(f"{self._name} contains no object named {name}")
-
-    def _id(self, name, extended: bool = True):
-        """Query the simulator for an object with the specified *name*,
-        and cache the result to build a tree of objects.
+    @deprecated(
+        "Use `handle[child_name]` syntax instead. If extended identifiers are needed simply add a '\\' character before and after the name."
+    )
+    def _id(self, name: str, extended: bool = True) -> SimHandleBase:
+        """Query the simulator for an object with the specified *name*.
 
         If *extended* is ``True``, run the query only for VHDL extended identifiers.
         For Verilog, only ``extended=False`` is supported.
+
+        .. deprecated:: 2.0
+            Use `handle[child_name]` syntax instead.
+            If extended identifiers are needed simply add a '\\' character before and after the name.
 
         :meta public:
         """
         if extended:
             name = "\\" + name + "\\"
 
-        handle = self.__get_sub_handle_by_name(name)
-        if handle is not None:
-            return handle
-
-        raise AttributeError(f"{self._name} contains no object named {name}")
+        return self[name]
 
 
 class HierarchyArrayObject(RegionObjectBase[int]):
