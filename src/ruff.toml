@@ -1,0 +1,17 @@
+# Add pydocstyle to this directory only
+extend = "../pyproject.toml"
+
+select = [
+    "D",    # pydocstyle
+]
+
+ignore = [
+    # These are due to how we use Sphinx for documentation generation
+    "D100",     # Missing docstring in public module
+    "D104",     # Missing docstring in public package
+    "D105",     # Missing docstring in magic method
+    "D107",     # Missing docstring in `__init__`
+]
+
+[lint.pydocstyle]
+convention = "google"
