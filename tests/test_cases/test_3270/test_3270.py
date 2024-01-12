@@ -29,7 +29,7 @@ class MonitorChange:
 
         while not update:
             await First(RisingEdge(self.signal), RisingEdge(self.valid))
-            update = self.signal.value == 1 and self.valid.value == 1
+            update = self.signal.value.integer == 1 and self.valid.value.integer == 1
 
         assert self.expect_change, "Unexpected change happened"
 

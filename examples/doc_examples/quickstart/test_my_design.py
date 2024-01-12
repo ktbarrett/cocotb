@@ -5,6 +5,7 @@
 
 import cocotb
 from cocotb.triggers import Timer
+from cocotb.types import Logic
 
 
 @cocotb.test()
@@ -18,7 +19,7 @@ async def my_first_test(dut):
         await Timer(1, units="ns")
 
     dut._log.info("my_signal_1 is %s", dut.my_signal_1.value)
-    assert dut.my_signal_2.value[0] == 0, "my_signal_2[0] is not 0!"
+    assert dut.my_signal_2.value[0] == Logic(0), "my_signal_2[0] is not 0!"
 
 
 # test_my_design.py (extended)
@@ -47,4 +48,4 @@ async def my_second_test(dut):
     await FallingEdge(dut.clk)  # wait for falling edge/"negedge"
 
     dut._log.info("my_signal_1 is %s", dut.my_signal_1.value)
-    assert dut.my_signal_2.value[0] == 0, "my_signal_2[0] is not 0!"
+    assert dut.my_signal_2.value[0] == Logic(0), "my_signal_2[0] is not 0!"

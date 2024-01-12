@@ -334,7 +334,7 @@ async def test_last_scheduled_write_wins_array(dut):
 
     await ReadOnly()
 
-    assert dut.array_7_downto_4.value == [10, 2, 3, 4]
+    assert [e.integer for e in dut.array_7_downto_4.value] == [10, 2, 3, 4]
 
 
 # Most simulators do not support setting the value of a single bit of a packed array
@@ -351,7 +351,7 @@ async def test_last_scheduled_write_wins_array_handle_alias(dut):
 
     await ReadOnly()
 
-    assert dut.array_7_downto_4.value == [1, 0, 0, 0]
+    assert [e.integer for e in dut.array_7_downto_4.value] == [1, 0, 0, 0]
 
 
 @cocotb.test()

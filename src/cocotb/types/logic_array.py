@@ -2,6 +2,7 @@
 # Licensed under the Revised BSD License, see LICENSE for details.
 # SPDX-License-Identifier: BSD-3-Clause
 import typing
+import warnings
 
 from cocotb.types.array import Array
 from cocotb.types.logic import Logic, LogicConstructibleT
@@ -271,6 +272,17 @@ class LogicArray(Array[Logic]):
 
     def __invert__(self: Self) -> Self:
         return type(self)(~v for v in self)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            warnings.warn(
+                "Comparing LogicArray to integer is deprecated and will be removed. "
+                "Instead, convert the LogicArray to an integer explicitly before comparing.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return self.integer == other
+        return super().__eq__(other)
 
 
 def _int_to_bitstr(value: int, n_bits: int) -> str:

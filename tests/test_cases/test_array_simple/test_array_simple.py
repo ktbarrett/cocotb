@@ -13,11 +13,6 @@ from cocotb.triggers import Timer
 tlog = logging.getLogger("cocotb.test")
 
 
-def _check_value(tlog, hdl, expected):
-    assert hdl.value == expected
-    tlog.info(f"   Found {hdl!r} ({hdl._type}) with value={hdl.value}")
-
-
 # GHDL unable to put values on nested array types (gh-2588)
 @cocotb.test(
     expect_error=Exception if cocotb.SIM_NAME.lower().startswith("ghdl") else ()
@@ -34,10 +29,20 @@ async def test_1dim_array_handles(dut):
 
     await Timer(1000, "ns")
 
-    _check_value(tlog, dut.array_7_downto_4, [0xF0, 0xE0, 0xD0, 0xC0])
-    _check_value(tlog, dut.array_4_to_7, [0xB0, 0xA0, 0x90, 0x80])
-    _check_value(tlog, dut.array_3_downto_0, [0x70, 0x60, 0x50, 0x40])
-    _check_value(tlog, dut.array_0_to_3, [0x30, 0x20, 0x10, 0x00])
+    assert [e.integer for e in dut.array_7_downto_4.value] == [
+        0xF0,
+        0xE0,
+        0xD0,
+        0xC0,
+    ]
+    assert [e.integer for e in dut.array_4_to_7.value] == [0xB0, 0xA0, 0x90, 0x80]
+    assert [e.integer for e in dut.array_3_downto_0.value] == [
+        0x70,
+        0x60,
+        0x50,
+        0x40,
+    ]
+    assert [e.integer for e in dut.array_0_to_3.value] == [0x30, 0x20, 0x10, 0x00]
 
 
 # GHDL unable to put values on nested array types (gh-2588)
@@ -59,9 +64,10 @@ async def test_ndim_array_handles(dut):
 
     await Timer(1000, "ns")
 
-    _check_value(
-        tlog, dut.array_2d, [[0xF0, 0xE0, 0xD0, 0xC0], [0xB0, 0xA0, 0x90, 0x80]]
-    )
+    assert [[e.integer for e in a] for a in dut.array_2d.value] == [
+        [0xF0, 0xE0, 0xD0, 0xC0],
+        [0xB0, 0xA0, 0x90, 0x80],
+    ]
 
 
 # GHDL unable to put values on nested array types (gh-2588)
@@ -81,15 +87,15 @@ async def test_1dim_array_indexes(dut):
     await Timer(1000, "ns")
 
     # Check indices
-    _check_value(tlog, dut.array_7_downto_4[7], 0xF0)
-    _check_value(tlog, dut.array_7_downto_4[4], 0xC0)
-    _check_value(tlog, dut.array_4_to_7[4], 0xB0)
-    _check_value(tlog, dut.array_4_to_7[7], 0x80)
-    _check_value(tlog, dut.array_3_downto_0[3], 0x70)
-    _check_value(tlog, dut.array_3_downto_0[0], 0x40)
-    _check_value(tlog, dut.array_0_to_3[0], 0x30)
-    _check_value(tlog, dut.array_0_to_3[3], 0x00)
-    _check_value(tlog, dut.array_0_to_3[1], 0x20)
+    assert dut.array_7_downto_4[7].value.integer == 0xF0
+    assert dut.array_7_downto_4[4].value.integer == 0xC0
+    assert dut.array_4_to_7[4].value.integer == 0xB0
+    assert dut.array_4_to_7[7].value.integer == 0x80
+    assert dut.array_3_downto_0[3].value.integer == 0x70
+    assert dut.array_3_downto_0[0].value.integer == 0x40
+    assert dut.array_0_to_3[0].value.integer == 0x30
+    assert dut.array_0_to_3[3].value.integer == 0x00
+    assert dut.array_0_to_3[1].value.integer == 0x20
 
     # Get sub-handles through NonHierarchyIndexableObject.__getitem__
     dut.array_7_downto_4[7].value = 0xDE
@@ -100,11 +106,11 @@ async def test_1dim_array_indexes(dut):
 
     await Timer(1000, "ns")
 
-    _check_value(tlog, dut.array_7_downto_4[7], 0xDE)
-    _check_value(tlog, dut.array_4_to_7[4], 0xFC)
-    _check_value(tlog, dut.array_3_downto_0[0], 0xAB)
-    _check_value(tlog, dut.array_0_to_3[1], 0x7A)
-    _check_value(tlog, dut.array_0_to_3[3], 0x42)
+    assert dut.array_7_downto_4[7].value.integer == 0xDE
+    assert dut.array_4_to_7[4].value.integer == 0xFC
+    assert dut.array_3_downto_0[0].value.integer == 0xAB
+    assert dut.array_0_to_3[1].value.integer == 0x7A
+    assert dut.array_0_to_3[3].value.integer == 0x42
 
 
 # GHDL unable to put values on nested array types (gh-2588)
@@ -127,10 +133,10 @@ async def test_ndim_array_indexes(dut):
     await Timer(1000, "ns")
 
     # Check indices
-    _check_value(tlog, dut.array_2d[1], [0xB0, 0xA0, 0x90, 0x80])
-    _check_value(tlog, dut.array_2d[0][31], 0xF0)
-    _check_value(tlog, dut.array_2d[1][29], 0x90)
-    _check_value(tlog, dut.array_2d[1][28], 0x80)
+    assert [e.integer for e in dut.array_2d[1].value] == [0xB0, 0xA0, 0x90, 0x80]
+    assert dut.array_2d[0][31].value.integer == 0xF0
+    assert dut.array_2d[1][29].value.integer == 0x90
+    assert dut.array_2d[1][28].value.integer == 0x80
 
     # Get sub-handles through NonHierarchyIndexableObject.__getitem__
     dut.array_2d[1].value = [0xDE, 0xAD, 0xBE, 0xEF]
@@ -138,10 +144,10 @@ async def test_ndim_array_indexes(dut):
 
     await Timer(1000, "ns")
 
-    _check_value(tlog, dut.array_2d[0][31], 0x0F)
-    _check_value(tlog, dut.array_2d[0][29], 0xD0)
-    _check_value(tlog, dut.array_2d[1][30], 0xAD)
-    _check_value(tlog, dut.array_2d[1][28], 0xEF)
+    assert dut.array_2d[0][31].value.integer == 0x0F
+    assert dut.array_2d[0][29].value.integer == 0xD0
+    assert dut.array_2d[1][30].value.integer == 0xAD
+    assert dut.array_2d[1][28].value.integer == 0xEF
 
 
 # GHDL unable to access record signals (gh-2591)
@@ -163,10 +169,10 @@ async def test_struct(dut):
     cocotb.start_soon(Clock(dut.clk, 1000, "ns").start())
     dut.inout_if.a_in.value = 1
     await Timer(1000, "ns")
-    _check_value(tlog, dut.inout_if.a_in, 1)
+    assert dut.inout_if.a_in.value.integer == 1
     dut.inout_if.a_in.value = 0
     await Timer(1000, "ns")
-    _check_value(tlog, dut.inout_if.a_in, 0)
+    assert dut.inout_if.a_in.value.integer == 0
 
 
 @contextlib.contextmanager

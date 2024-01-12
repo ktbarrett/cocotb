@@ -105,20 +105,24 @@ async def access_signal(dut):
 async def access_type_bit_verilog(dut):
     """Access type bit in SystemVerilog"""
     await Timer(1, "step")
-    assert dut.mybit.value == 1, "The default value was incorrect"
+    assert dut.mybit.value.integer == 1, "The default value was incorrect"
     dut.mybit.value = 0
     await Timer(1, "ns")
-    assert dut.mybit.value == 0, "The assigned value was incorrect"
+    assert dut.mybit.value.integer == 0, "The assigned value was incorrect"
 
-    assert dut.mybits.value == 0b11, "The default value was incorrect"
+    assert dut.mybits.value.integer == 0b11, "The default value was incorrect"
     dut.mybits.value = 0b00
     await Timer(1, "ns")
-    assert dut.mybits.value == 0b00, "The assigned value was incorrect"
+    assert dut.mybits.value.integer == 0b00, "The assigned value was incorrect"
 
-    assert dut.mybits_uninitialized.value == 0b00, "The default value was incorrect"
+    assert (
+        dut.mybits_uninitialized.value.integer == 0b00
+    ), "The default value was incorrect"
     dut.mybits_uninitialized.value = 0b11
     await Timer(1, "ns")
-    assert dut.mybits_uninitialized.value == 0b11, "The assigned value was incorrect"
+    assert (
+        dut.mybits_uninitialized.value.integer == 0b11
+    ), "The assigned value was incorrect"
 
 
 @cocotb.test(skip=cocotb.LANGUAGE in ["vhdl"])
@@ -382,7 +386,7 @@ async def access_internal_register_array(dut):
     dut.register_array[1].setimmediatevalue(4)
     await Timer(1, "ns")
     assert (
-        dut.register_array[1].value == 4
+        dut.register_array[1].value.integer == 4
     ), "Failed to set internal register array value"
 
 

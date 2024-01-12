@@ -69,17 +69,17 @@ async def test_string_ansi_color(dut):
         # Riviera-PRO doesn't return anything with VHDL:
         assert val == b""
         # ...and the value shows up differently in the HDL:
-        assert dut.stream_in_string_asciival_sum.value == sum(
+        assert dut.stream_in_string_asciival_sum.value.integer == sum(
             ord(char) for char in teststr.replace("\x1b", "\0")
         )
     elif cocotb.LANGUAGE in ["verilog"] and SIM_NAME.startswith(("ncsim", "xmsim")):
         # Xcelium with VPI strips the escape char when reading:
         assert val == bytes(teststr.replace("\x1b", "").encode("ascii"))
         # the HDL gets the correct value though:
-        assert dut.stream_in_string_asciival_sum.value == asciival_sum
+        assert dut.stream_in_string_asciival_sum.value.integer == asciival_sum
     else:
         assert val == bytes(teststr.encode("ascii"))
-        assert dut.stream_in_string_asciival_sum.value == asciival_sum
+        assert dut.stream_in_string_asciival_sum.value.integer == asciival_sum
 
 
 async def test_delayed_assignment_still_errors(dut):
@@ -389,13 +389,13 @@ async def test_access_underscore_name(dut):
     # indirect access works
     dut._id("_underscore_name", extended=False).value = 0
     await Timer(1, "ns")
-    assert dut._id("_underscore_name", extended=False).value == 0
+    assert dut._id("_underscore_name", extended=False).value.integer == 0
     dut._id("_underscore_name", extended=False).value = 1
     await Timer(1, "ns")
-    assert dut._id("_underscore_name", extended=False).value == 1
+    assert dut._id("_underscore_name", extended=False).value.integer == 1
     dut._id("_underscore_name", extended=False).value = 0
     await Timer(1, "ns")
-    assert dut._id("_underscore_name", extended=False).value == 0
+    assert dut._id("_underscore_name", extended=False).value.integer == 0
 
 
 @cocotb.test()

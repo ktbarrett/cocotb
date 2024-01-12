@@ -475,14 +475,14 @@ async def test_direct_signal_indexing(dut):
     await Timer(20, "ns")
 
     tlog.info("Checking bit mapping from input to generate loops.")
-    assert dut.desc_gen[2].sig.value == 1
+    assert dut.desc_gen[2].sig.value.integer == 1
     tlog.info("   %r = %d", dut.desc_gen[2].sig, dut.desc_gen[2].sig.value)
 
-    assert dut.asc_gen[18].sig.value == 1
+    assert dut.asc_gen[18].sig.value.integer == 1
     tlog.info("   %r = %d", dut.asc_gen[18].sig, dut.asc_gen[18].sig.value)
 
     tlog.info("Checking indexing of data with offset index.")
-    assert dut.port_ofst_out.value == 64
+    assert dut.port_ofst_out.value.integer == 64
     tlog.info(
         "   %r = %d (%s)",
         dut.port_ofst_out,

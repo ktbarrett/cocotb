@@ -208,7 +208,7 @@ async def test_writes_have_taken_effect_after_readwrite(dut):
 
     # check that the write we expected took precedence
     await ReadOnly()
-    assert dut.stream_in_data.value == 2
+    assert dut.stream_in_data.value.integer == 2
 
 
 async def example_coro():
