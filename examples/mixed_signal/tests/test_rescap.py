@@ -6,8 +6,8 @@ from itertools import cycle
 
 import cocotb
 import matplotlib.pyplot as plt
+from cocotb.sim_time import get_sim_time
 from cocotb.triggers import Timer
-from cocotb.utils import get_sim_time
 
 Dataset = namedtuple("Dataset", "time, voltage, current")
 

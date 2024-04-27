@@ -18,6 +18,7 @@ from typing import Any, Awaitable, Coroutine
 import cocotb
 import pytest
 from cocotb.clock import Clock
+from cocotb.sim_time import get_sim_time
 from cocotb.task import Task
 from cocotb.triggers import (
     Combine,
@@ -547,9 +548,9 @@ async def test_await_start_soon(_):
     """Test awaiting start_soon queued coroutine before it starts."""
 
     async def coro():
-        start_time = cocotb.utils.get_sim_time(units="ns")
+        start_time = get_sim_time(units="ns")
         await Timer(1, "ns")
-        assert cocotb.utils.get_sim_time(units="ns") == start_time + 1
+        assert get_sim_time(units="ns") == start_time + 1
 
     coro = cocotb.start_soon(coro())
 

@@ -19,6 +19,7 @@ from fractions import Fraction
 import cocotb
 import pytest
 from cocotb.clock import Clock
+from cocotb.sim_time import get_sim_time
 from cocotb.simulator import get_precision
 from cocotb.triggers import (
     First,
@@ -30,7 +31,6 @@ from cocotb.triggers import (
     Timer,
 )
 from cocotb.triggers import _TriggerException as TriggerException
-from cocotb.utils import get_sim_time
 
 LANGUAGE = os.environ["TOPLEVEL_LANG"].lower().strip()
 

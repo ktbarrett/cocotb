@@ -13,7 +13,7 @@ import cocotb
 import cocotb.triggers
 from cocotb import _outcomes
 from cocotb._py_compat import cached_property
-from cocotb.utils import extract_coro_stack, remove_traceback_frames
+from cocotb._utils import extract_coro_stack, remove_traceback_frames
 
 T = TypeVar("T")
 

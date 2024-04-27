@@ -13,9 +13,9 @@ from math import isclose
 import cocotb
 import pytest
 from cocotb.clock import Clock
+from cocotb.sim_time import get_sim_time
 from cocotb.simulator import get_precision
 from cocotb.triggers import RisingEdge, Timer
-from cocotb.utils import get_sim_time
 
 LANGUAGE = os.environ["TOPLEVEL_LANG"].lower().strip()
 

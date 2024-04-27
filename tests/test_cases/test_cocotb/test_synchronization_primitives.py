@@ -7,8 +7,8 @@ Tests for synchronization primitives like Lock and Event
 
 import cocotb
 import pytest
+from cocotb.sim_time import get_sim_time
 from cocotb.triggers import Lock, Timer, _InternalEvent
-from cocotb.utils import get_sim_time
 
 
 @cocotb.test()

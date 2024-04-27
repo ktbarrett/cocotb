@@ -3,7 +3,7 @@ import sys
 import tempfile
 
 import pytest
-from cocotb.utils import _get_log_time_scale
+from cocotb.sim_time import _get_log_time_scale
 from cocotb_tools.runner import get_runner
 from test_cocotb import (
     compile_args,
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(tests_dir, "pytest"))
 
 cocotb_test_contents = """
 import cocotb
-from cocotb.utils import _get_simulator_precision
+from cocotb.sim_time import _get_simulator_precision
 
 @cocotb.test()
 async def check_timescale(dut):

@@ -45,6 +45,7 @@ from typing import Any, Callable, Union
 
 import cocotb
 from cocotb import _outcomes, _py_compat
+from cocotb._utils import remove_traceback_frames
 from cocotb.result import TestComplete
 from cocotb.task import Task
 from cocotb.triggers import (
@@ -58,7 +59,6 @@ from cocotb.triggers import (
     Timer,
     Trigger,
 )
-from cocotb.utils import remove_traceback_frames
 
 # Debug mode controlled by environment variables
 _profiling = "COCOTB_ENABLE_PROFILING" in os.environ

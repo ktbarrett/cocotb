@@ -55,14 +55,10 @@ import cocotb.task
 from cocotb import simulator
 from cocotb._outcomes import Error, Outcome, Value
 from cocotb._py_compat import cached_property
+from cocotb._utils import _ParameterizedSingletonMetaclass, remove_traceback_frames
 from cocotb.handle import LogicObject, ValueObjectBase
 from cocotb.result import SimTimeoutError
-from cocotb.utils import (
-    _ParameterizedSingletonMetaclass,
-    get_sim_steps,
-    get_time_from_sim_steps,
-    remove_traceback_frames,
-)
+from cocotb.sim_time import get_sim_steps, get_time_from_sim_steps
 
 T = TypeVar("T")
 
