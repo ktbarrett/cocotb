@@ -20,7 +20,7 @@ from common import MyException
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.task import Task
+from cocotb.task import CancellationError, Task
 from cocotb.triggers import (
     Combine,
     Event,
@@ -51,7 +51,7 @@ async def test_task_kill(dut):
     await Timer(100, "ns")
     cocotb.start_soon(clock_yield(clk_task))
     await Timer(100, "ns")
-    clk_task.kill()
+    clk_task.cancel()
     assert not test_flag
     await Timer(1000, "ns")
     assert test_flag
@@ -144,9 +144,9 @@ async def test_kill_twice(dut):
     """
     clk_gen = cocotb.start_soon(Clock(dut.clk, 100, "ns").start())
     await Timer(1, "ns")
-    clk_gen.kill()
+    clk_gen.cancel()
     await Timer(1, "ns")
-    clk_gen.kill()
+    clk_gen.cancel()
 
 
 @cocotb.test()
@@ -222,7 +222,7 @@ async def test_kill_coroutine_waiting_on_the_same_trigger(dut):
 
     async def killer():
         await RisingEdge(dut.clk)
-        victim_task.kill()
+        victim_task.cancel()
 
     cocotb.start_soon(killer())
 
@@ -414,7 +414,7 @@ async def test_task_repr(dut):
     async def coroutine_first():
         task = Task(coroutine_wait())
         await First(task, Timer(2, units="ns"))
-        task.kill()
+        task.cancel()
 
     coro_task = await cocotb.start(coroutine_first())
 
@@ -488,7 +488,7 @@ async def test_task_repr(dut):
     log.info(repr(object_task))
     assert re.match(r"<Task \d+ created coro=CoroutineClass\(\)>", repr(object_task))
 
-    object_task.kill()  # prevent RuntimeWarning of unwatched coroutine
+    object_task.cancel()  # prevent RuntimeWarning of unwatched coroutine
 
 
 @cocotb.test()
@@ -603,7 +603,7 @@ async def test_kill_start_soon_task(_):
         coro_scheduled = True
 
     task = cocotb.start_soon(coro())
-    task.kill()
+    task.cancel()
 
     await NullTrigger()
     assert coro_scheduled is False
@@ -797,7 +797,7 @@ async def test_task_exception(_):
 
 
 @cocotb.test()
-async def test_cancel_task(_):
+async def test_cancel_task_methods(_):
     async def coro():
         return 0
 
@@ -808,14 +808,82 @@ async def test_cancel_task(_):
     assert not task.cancelled()
     assert task.done()
 
-    task = cocotb.start_soon(coro())
-    with pytest.warns(FutureWarning):
-        task.cancel("msg1234")
+
+@cocotb.test
+async def test_cancel_task_running(_):
+    async def coro2():
+        try:
+            await Timer(10, "ns")
+        except CancelledError:
+            raise
+        assert False
+
+    task = cocotb.start_soon(coro2())
+
+    # wait until it's blocking to cancel
+    await Timer(5, "ns")
+    task.cancel("msg1234")
+    await NullTrigger()
+
     assert task.cancelled()
     with pytest.raises(CancelledError, match="msg1234"):
         task.result()
     with pytest.raises(CancelledError, match="msg1234"):
         task.exception()
+
+
+@cocotb.test
+async def test_cancel_task_cancelled(_):
+    async def coro():
+        await Timer(10, "ns")
+        assert False
+
+    task = cocotb.start_soon(coro())
+
+    # cancel it during await
+    await Timer(5, "ns")
+    task.cancel()
+    await NullTrigger()
+
+    assert task.done()
+    assert task.cancelled()
+
+    # try cancelling again to see if that hits the assert
+    task.cancel()
+    await NullTrigger()
+
+
+@cocotb.test
+async def test_cancel_task_scheduled(_):
+    async def coro():
+        assert False
+
+    task = cocotb.start_soon(coro())
+
+    # cancel before it runs
+    with pytest.warns(RuntimeWarning):
+        task.cancel()
+    await NullTrigger()
+
+    # will assert by now if not cancelled
+
+
+@cocotb.test(expect_error=CancellationError)
+async def test_cancel_task_suppress(_):
+    async def coro():
+        try:
+            await Timer(10, "ns")
+        except CancelledError:
+            pass
+        # will yield this because we squashed
+        await Timer(1, "ns")
+
+    task = cocotb.start_soon(coro())
+
+    # cancel during first await
+    await Timer(5, "ns")
+    task.cancel()
+    await NullTrigger()
 
 
 @cocotb.test()
@@ -857,3 +925,16 @@ async def test_get_task_from_join(_) -> None:
     j = await Join(t)
     assert isinstance(j, Join)
     assert j.task is t
+
+
+@cocotb.test
+async def test_shutdown_cancellation(_):
+    async def lol():
+        e = Event()
+        try:
+            await e.wait()
+        except CancelledError:
+            raise MyException()
+
+    cocotb.start_soon(lol())
+    await NullTrigger()

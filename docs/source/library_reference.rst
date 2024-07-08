@@ -71,6 +71,8 @@ Task Management
 
 .. autofunction:: cocotb.create_task
 
+.. autoclass:: cocotb.task.CancellationError
+
 .. autoclass:: cocotb.task.ResultType
 
 .. autoclass:: cocotb.task.Task

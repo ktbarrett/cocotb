@@ -121,7 +121,7 @@ forcing their completion before they would naturally end.
         edge_time_ns = get_sim_time(units='ns')
         assert isclose(edge_time_ns, start_time_ns + 1000.0), "Expected a period of 1 us"
 
-        clk_gen.kill()  # kill clock coroutine here
+        clk_gen.cancel()  # stop clock coroutine here
 
         clk_gen = cocotb.start_soon(clk_250mhz.start())
         start_time_ns = get_sim_time(units='ns')

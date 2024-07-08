@@ -916,7 +916,7 @@ class First(_AggregateWaitable[Any]):
         # TODO: Should this kill the coroutines behind any Join triggers?
         # Right now it does not.
         for w in waiters:
-            w.kill()
+            w.cancel()
 
         return completed[0].get()
 
@@ -1082,7 +1082,7 @@ async def with_timeout(
         if not shielded:
             # shielded = False only when trigger is a Task
             trigger = cast(cocotb.task.Task[Any], trigger)
-            trigger.kill()
+            trigger.cancel()
         raise SimTimeoutError
     else:
         return res

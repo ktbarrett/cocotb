@@ -446,19 +446,13 @@ class Scheduler:
             self.log.debug("All tasks scheduled, handing control back to simulator")
 
     def _unschedule(self, task: Task[Any]) -> None:
-        """Unschedule a task and unprime dangling pending triggers.
-
-        Also:
-          * enters the scheduler termination state if the Test Task is unscheduled.
-          * creates and fires a :class:`~cocotb.triggers.Join` trigger.
-          * forcefully ends the Test if a Task ends with an exception.
-        """
-
-        # remove task from queue
+        """Unschedule a task, unprime dangling pending triggers, fire :class:`~cocotb.trigger.Join` trigger."""
+        # remove task from queue if trigger has fired
         if task in self._pending_tasks:
             self._pending_tasks.pop(task)
 
-        # Unprime the trigger this task is waiting on
+        # unprime trigger this task is waiting on
+        # TODO move to Task object
         trigger = task._trigger
         if trigger is not None:
             task._trigger = None
@@ -468,16 +462,25 @@ class Scheduler:
                 trigger._unprime()
                 del self._trigger2tasks[trigger]
 
+        # Fire Join trigger now that Task has finished
+        # TODO move to Task object
+        join = Join(task)
+        if join in self._trigger2tasks:
+            self._react(join)
+
+    def _check_termination(self, task: Task[Any]) -> None:
+        """Like unscheduler but does additional tasks.
+
+        * enters the scheduler termination state if the Test Task is unscheduled.
+        * forcefully ends the Test if a Task ends with an exception.
+        """
+
         assert self._test is not None
 
         if task is self._test:
             if _debug:
                 self.log.debug(f"Unscheduling test {task}")
-
             self._terminate = True
-
-        elif Join(task) in self._trigger2tasks:
-            self._react(Join(task))
         else:
             try:
                 # throws an error if the background task errored
@@ -485,11 +488,11 @@ class Scheduler:
                 task._outcome.get()
             except (TestSuccess, SimFailure, AssertionError) as e:
                 task.log.info("Test stopped by this task")
-                e = remove_traceback_frames(e, ["_unschedule", "get"])
+                e = remove_traceback_frames(e, ["_check_termination", "get"])
                 self._abort_test(e)
             except BaseException as e:
                 task.log.error("Exception raised by this task")
-                e = remove_traceback_frames(e, ["_unschedule", "get"])
+                e = remove_traceback_frames(e, ["_check_termination", "get"])
                 warnings.warn(
                     '"Unwatched" tasks that throw exceptions will not cause the test to fail. '
                     "See issue #2664 for more details.",
@@ -563,6 +566,15 @@ class Scheduler:
         if task in self._pending_tasks:
             raise InternalError("Task was queued more than once.")
         self._pending_tasks[task] = outcome
+
+    # def cancel_task(
+    #     self, task: Task[Any], exc: CancelledError
+    # ) -> None:
+    #     if task in self._pending_tasks:
+    #         self._pending_tasks.pop(task)
+    #     else:
+    #         for _, t in self._trigger2tasks.items():
+    #             if t is task:
 
     def _queue_function(self, task):
         """Queue a task for execution and move the containing thread
@@ -749,6 +761,7 @@ class Scheduler:
                     self.log.debug(f"{task} completed with {task._outcome}")
                 assert result is None
                 self._unschedule(task)
+                self._check_termination(task)
 
             # Don't handle the result if we're shutting down
             if self._terminate:
@@ -805,6 +818,7 @@ class Scheduler:
             self._test.log.debug(f"outcome forced to {outcome}")
         self._test._outcome = outcome
         self._unschedule(self._test)
+        self._check_termination(self._test)
 
     def _finish_scheduler(self, exc):
         """Directly call into the regression manager and end test
@@ -823,12 +837,10 @@ class Scheduler:
 
         Unprime all pending triggers and kill off any tasks, stop all externals.
         """
-        # copy since we modify this in kill
-        items = list((k, list(v)) for k, v in self._trigger2tasks.items())
 
         # reversing seems to fix gh-928, although the order is still somewhat
         # arbitrary.
-        for _, waiting in items[::-1]:
+        for _, waiting in self._trigger2tasks.items():
             for task in waiting:
                 if _debug:
                     self.log.debug(f"Killing {task}")

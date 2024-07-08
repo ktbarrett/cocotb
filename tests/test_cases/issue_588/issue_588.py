@@ -21,7 +21,7 @@ async def issue_588_coroutine_list(dut):
     # Yield a list, containing a RisingEdge trigger and a coroutine.
     coro = cocotb.start_soon(sample_coroutine(dut))
     await triggers.First(coro, triggers.Timer(100, "ns"))
-    coro.kill()
+    coro.cancel()
 
     # Make sure that only 5 ns passed, because the sample coroutine
     # terminated first.

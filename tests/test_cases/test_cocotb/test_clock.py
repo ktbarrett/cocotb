@@ -48,7 +48,7 @@ async def test_clock_with_units(dut):
     edge_time_ns = get_sim_time(units="ns")
     assert isclose(edge_time_ns, start_time_ns + 1000.0), "Expected a period of 1 us"
 
-    clk_gen.kill()
+    clk_gen.cancel()
 
     clk_gen = await cocotb.start(clk_250mhz.start())
 
@@ -66,7 +66,7 @@ async def test_clock_with_units(dut):
     edge_time_ns = get_sim_time(units="ns")
     assert isclose(edge_time_ns, start_time_ns + 4.0), "Expected a period of 4 ns"
 
-    clk_gen.kill()
+    clk_gen.cancel()
 
 
 # Xcelium/VHDL does not correctly report the simulator precision.

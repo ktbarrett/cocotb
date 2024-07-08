@@ -7,6 +7,7 @@ import logging
 import os
 import warnings
 from asyncio import CancelledError, InvalidStateError
+from enum import Enum, auto
 from typing import Any, Coroutine, Generator, Generic, Optional, TypeVar
 
 import cocotb
@@ -21,6 +22,21 @@ ResultType = TypeVar("ResultType")
 # Sadly the Python standard logging module is very slow so it's better not to
 # make any calls by testing a boolean flag first
 _debug = "COCOTB_SCHEDULER_DEBUG" in os.environ
+
+
+class CancellationError(Exception):
+    """Result of a cancelled Task when cancellation exits abnormally."""
+
+    def __init__(self, msg: str, outcome: Outcome) -> None:
+        super().__init__(msg)
+        self.outcome = outcome
+
+
+class _TaskState(Enum):
+    UNSTARTED = auto()
+    PENDING = auto()
+
+    FINISHED = auto()
 
 
 class Task(Generic[ResultType]):
@@ -60,7 +76,7 @@ class Task(Generic[ResultType]):
         self._started: bool = False
         self._outcome: Optional[Outcome[ResultType]] = None
         self._trigger: Optional[cocotb.triggers.Trigger] = None
-        self._cancelled: Optional[CancelledError] = None
+        self._cancel_exc: Optional[CancelledError] = None
 
         self._task_id = self._id_count
         type(self)._id_count += 1
@@ -93,6 +109,10 @@ class Task(Generic[ResultType]):
 
         if cocotb._scheduler_inst._current_task is self:
             fmt = "<{name} running coro={coro}()>"
+        elif self.cancelling():
+            fmt = "<{name} cancelling coro={coro}() cancel_exc={cancel_exc}>"
+        elif self.cancelled():
+            fmt = "<{name} cancelled coro={coro}() outcome={outcome} cancel_exc={cancel_exc}>"
         elif self.done():
             fmt = "<{name} finished coro={coro}() outcome={outcome}>"
         elif self._trigger is not None:
@@ -118,6 +138,7 @@ class Task(Generic[ResultType]):
             coro=coro_name,
             trigger=self._trigger,
             outcome=self._outcome,
+            cancel_exc=self._cancel_exc,
         )
         return repr_string
 
@@ -131,29 +152,37 @@ class Task(Generic[ResultType]):
             The object yielded from the coroutine or None if coroutine finished
 
         """
+        self._started = True
         try:
-            self._started = True
-            return outcome.send(self._coro)
+            res = outcome.send(self._coro)
         except StopIteration as e:
-            self._outcome = Value(e.value)
+            if self.cancelling():
+                self._outcome = Error(
+                    CancellationError(
+                        "Task was cancelled, but exited normally. Did you forget to re-raise the CancelledError?",
+                        outcome=Value(e.value),
+                    )
+                )
+            else:
+                self._outcome = Value(e.value)
+        except CancelledError as e:
+            if e is self._cancel_exc:
+                # only the exact CancelledError we threw will do.
+                self._outcome = Value(None)
+            else:
+                self._outcome = Error(remove_traceback_frames(e, ["_cancel", "send"]))
         except BaseException as e:
             self._outcome = Error(remove_traceback_frames(e, ["_advance", "send"]))
-
-    def kill(self) -> None:
-        """Kill a coroutine."""
-        if self._outcome is not None:
-            # already finished, nothing to kill
-            return
-
-        if _debug:
-            self.log.debug("kill() called on coroutine")
-        # todo: probably better to throw an exception for anyone waiting on the coroutine
-        self._outcome = Value(None)
-        cocotb._scheduler_inst._unschedule(self)
-
-        # Close coroutine so there is no RuntimeWarning that it was never awaited
-        if not self.has_started():
-            self._coro.close()
+        else:
+            if self.cancelling():
+                self._outcome = Error(
+                    CancellationError(
+                        "Task was cancelled, but continued running. Did you forget to re-raise the CancelledError?",
+                        Value(None),
+                    )
+                )
+            else:
+                return res
 
     def join(self) -> "cocotb.triggers.Join[ResultType]":
         """Wait for the task to complete.
@@ -180,26 +209,94 @@ class Task(Generic[ResultType]):
         return self._started
 
     def cancel(self, msg: Optional[str] = None) -> None:
-        """Cancel a Task's further execution.
+        """Schedule a Task for cancellation.
 
         When a Task is cancelled, a :exc:`asyncio.CancelledError` is thrown into the Task.
+        This allows the user to catch the :exc:`asyncio.CancelledError`,
+        use :keyword:`finally` statements,
+        or use :term:`context managers`
+        to perform cleanup when a Task is cancelled.
+        This includes when all Tasks are cancelled at the end of the Test.
+
+        Args:
+            msg: A message for the :exc:`CancelledError`.
+
+        Usage:
+            .. code-block:: python3
+
+                async def driver(dut):
+                    # Drives 1 for 100 ns, then drives 2.
+                    # If the driver is cancelled, it returns the value back to 0.
+
+                    dut.signal.value = 1
+                    try:
+                        await Timer(100, "ns")
+                    except CancelledError:
+                        dut.signal.value = 0
+                    else:
+                        dut.signal.value = 2
+
+
+                task = cocotb.start_soon(driver(dut))
+
+                await Timer(10, "ns")
+                # At this point 'task' is blocking on the `Timer(100, 'ns')`.
+
+                task.cancel()
+                # Cancellation is scheduled here, but not performed yet.
+
+                # Force a rescheduling.
+                await NullTrigger()
+
+                # The Task is now cancelled.
+                assert task.done()
+                assert task.cancelled()
+
+                # Check if 'cleanup' statement run.
+                await Timer(1, "ns")
+                assert dut.signal.value == 0
+
+            .. warning::
+                Cancelling a Task which hasn't started will not raise a :exc:`CancelledError`.
+                There is no way to start a Task with an Exception, nor is there any way to catch it.
+
+            .. warning::
+                If you catch a :exc:`CancelledError`, make sure to re-raise it using the bare :keyword:`raise` statement.
+                If you do not raise the same exception and the Task ends normally or reaches another ``await``,
+                cocotb will force the Task to end with a :exc:`CancellationError`.
+
+                This is a difference in behavior with `asyncio`, but one we consider to be beneficial to the user.
         """
-        self._cancelled = CancelledError(msg)
-        warnings.warn(
-            "Calling this method will cause a CancelledError to be thrown in the "
-            "Task sometime in the future.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        self.kill()
+        if self.done():
+            return
+
+        if not self._started:
+            # You can't throw CancelledError into pending task, coroutines must start being sent `None`.
+            # Also, there's no way to catch it.
+            # So we don't start it and just set the outcome to None.
+            warnings.warn(
+                "Cancelling an unstarted Task; no `CancelledError` will be raised.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+            self._outcome = Value(None)
+            return cocotb._scheduler_inst._unschedule(self)
+
+        # Schedule a CancelledError on the next _advance.
+        self._cancel_exc = CancelledError(msg)
+        cocotb._scheduler_inst.cancel_task(self, self._cancel_exc)
 
     def cancelled(self) -> bool:
         """Return ``True`` if the Task was cancelled."""
-        return self._cancelled is not None
+        return self._cancel_exc is not None and self.done()
+
+    def cancelling(self) -> bool:
+        return self._cancel_exc is not None and not self.done()
 
     def done(self) -> bool:
         """Return ``True`` if the Task has finished executing."""
-        return self._outcome is not None or self.cancelled()
+        return self._outcome is not None
 
     def result(self) -> ResultType:
         """Return the result of the Task.
@@ -212,7 +309,7 @@ class Task(Generic[ResultType]):
         if not self.done():
             raise InvalidStateError("result is not yet available")
         elif self.cancelled():
-            raise self._cancelled
+            raise self._cancel_exc
         else:
             return self._outcome.get()
 
@@ -227,7 +324,7 @@ class Task(Generic[ResultType]):
         if not self.done():
             raise InvalidStateError("result is not yet available")
         elif self.cancelled():
-            raise self._cancelled
+            raise self._cancel_exc
         elif isinstance(self._outcome, Error):
             return self._outcome.error
         else:
@@ -244,6 +341,10 @@ class Task(Generic[ResultType]):
         # Hand the coroutine back to the scheduler trampoline.
         yield self
         return self.result()
+
+    def __del__(self) -> None:
+        # Close coroutine so there is no RuntimeWarning that it was never awaited
+        self._coro.close()
 
 
 class _RunningTest(Task[None]):

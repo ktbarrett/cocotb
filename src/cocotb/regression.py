@@ -160,7 +160,7 @@ class Test:
                         running_co, self.timeout_time, self.timeout_unit
                     )
                 except cocotb.result.SimTimeoutError:
-                    running_co.kill()
+                    running_co.cancel()
                     raise
                 else:
                     return res
