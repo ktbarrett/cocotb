@@ -8,7 +8,7 @@ import os
 import warnings
 from asyncio import CancelledError, InvalidStateError
 from enum import Enum, auto
-from typing import Any, Coroutine, Generator, Generic, Optional, TypeVar
+from typing import Any, Callable, Coroutine, Generator, Generic, Optional, TypeVar
 
 import cocotb
 import cocotb.triggers
@@ -22,6 +22,9 @@ ResultType = TypeVar("ResultType")
 # Sadly the Python standard logging module is very slow so it's better not to
 # make any calls by testing a boolean flag first
 _debug = "COCOTB_SCHEDULER_DEBUG" in os.environ
+
+
+_Self = TypeVar("_Self", bound="Task")
 
 
 class CancellationError(Exception):
@@ -110,9 +113,9 @@ class Task(Generic[ResultType]):
         if cocotb._scheduler_inst._current_task is self:
             fmt = "<{name} running coro={coro}()>"
         elif self.cancelling():
-            fmt = "<{name} cancelling coro={coro}() cancel_exc={cancel_exc}>"
+            fmt = "<{name} cancelling coro={coro}() cancel_exc={cancel_exc!r}>"
         elif self.cancelled():
-            fmt = "<{name} cancelled coro={coro}() outcome={outcome} cancel_exc={cancel_exc}>"
+            fmt = "<{name} cancelled coro={coro}() outcome={outcome} cancel_exc={cancel_exc!r}>"
         elif self.done():
             fmt = "<{name} finished coro={coro}() outcome={outcome}>"
         elif self._trigger is not None:
@@ -138,7 +141,7 @@ class Task(Generic[ResultType]):
             coro=coro_name,
             trigger=self._trigger,
             outcome=self._outcome,
-            cancel_exc=self._cancel_exc,
+            cancel_exc=str(self._cancel_exc),
         )
         return repr_string
 
@@ -150,7 +153,6 @@ class Task(Generic[ResultType]):
 
         Returns:
             The object yielded from the coroutine or None if coroutine finished
-
         """
         self._started = True
         try:
@@ -267,8 +269,36 @@ class Task(Generic[ResultType]):
 
                 This is a difference in behavior with `asyncio`, but one we consider to be beneficial to the user.
         """
+        if msg is None:
+            error = CancelledError()
+        else:
+            error = CancelledError(msg)
+
+        def schedule_cancel(task: Task[Any], cancel_outcome: Error[Any]) -> None:
+            cocotb._scheduler_inst._unschedule(task)
+            cocotb._scheduler_inst._queue(task, cancel_outcome)
+
+        self._cancel(error, schedule_cancel)
+
+    def _cancel_now(self) -> None:
+        """Only to be called by scheduler."""
+        cocotb.log.info("Cancelling %r now", self)
+
+        def immediate_cancel(task: Task[Any], cancel_outcome: Error[Any]) -> None:
+            cocotb._scheduler_inst._unschedule(task)
+            Task._advance(task, cancel_outcome)
+
+        self._cancel(CancelledError(), immediate_cancel)
+
+    def _cancel(
+        self: _Self,
+        cancel_exc: CancelledError,
+        continuation: Callable[[_Self, Error[Any]], None],
+    ) -> None:
         if self.done():
             return
+
+        self._cancel_exc = cancel_exc
 
         if not self._started:
             # You can't throw CancelledError into pending task, coroutines must start being sent `None`.
@@ -277,15 +307,13 @@ class Task(Generic[ResultType]):
             warnings.warn(
                 "Cancelling an unstarted Task; no `CancelledError` will be raised.",
                 RuntimeWarning,
-                stacklevel=2,
+                stacklevel=3,
             )
-
             self._outcome = Value(None)
             return cocotb._scheduler_inst._unschedule(self)
 
-        # Schedule a CancelledError on the next _advance.
-        self._cancel_exc = CancelledError(msg)
-        cocotb._scheduler_inst.cancel_task(self, self._cancel_exc)
+        else:
+            continuation(self, Error(self._cancel_exc))
 
     def cancelled(self) -> bool:
         """Return ``True`` if the Task was cancelled."""

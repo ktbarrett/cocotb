@@ -176,6 +176,43 @@ class SimPhase(Enum):
     READ_ONLY = auto()
 
 
+# class TaskQueue:
+#     """FIFO of Tasks with associated Outcomes.
+
+#     - O(1) task membership
+#     - O(1) peek front
+#     - Amortized O(1) pop front
+#     - Amortized O(1) push back
+#     - Don't care about space really, this is a singleton.
+#     """
+
+#     def __init__(self) -> None:
+#         self._order: List[Task] = []
+#         self._map: Dict[Task, _outcomes.Outcome[Any]] = {}
+
+#     def queue(self, task: Task[Any], outcome: _outcomes.Outcome) -> None:
+#         self._order.append(task)
+#         self._map[task] = outcome
+
+#     def peek(self) -> Task:
+#         return self._order[0]
+
+#     def pop(self) -> Tuple[Task, _outcomes.Outcome]:
+#         task = self._order.pop(0)
+#         outcome = self._map.pop(task)
+#         return task, outcome
+
+#     def remove(self, task: Task[Any]) -> None:
+#         self._map.pop(task)
+#         self._order.remove(task)  # TODO this is O(n), m.i.b.
+
+#     def __contains__(self, task: Task[Any]) -> bool:
+#         return task in self._map
+
+#     def __bool__(self) -> bool:
+#         return bool(self._order)
+
+
 class Scheduler:
     """The main Task scheduler.
 
@@ -244,10 +281,6 @@ class Scheduler:
         The scheduler is currently where simulator time phase is tracked.
         This is mostly because this is where :meth:`_sim_react` is most conveniently located.
         The scheduler can't currently be made independent of simulator-specific code because of the above special cases which have to respect simulator phasing.
-
-        Currently Task cancellation is accomplished with :meth:`Task.kill() <cocotb.task.Task.kill>`.
-        This function immediately cancels the Task by re-entering the scheduler.
-        This can cause issues if you are trying to cancel the Test Task or the currently executing Task.
 
         TODO: There are attributes and methods for dealing with "externals", but I'm not quite sure how it all works yet.
     """
@@ -321,7 +354,7 @@ class Scheduler:
 
         # clean up write scheduler
         if self._write_task is not None:
-            self._write_task.kill()
+            self._write_task._cancel_now()
             self._write_task = None
         self._write_calls.clear()
         self._writes_pending.clear()
@@ -447,36 +480,34 @@ class Scheduler:
 
     def _unschedule(self, task: Task[Any]) -> None:
         """Unschedule a task, unprime dangling pending triggers, fire :class:`~cocotb.trigger.Join` trigger."""
-        # remove task from queue if trigger has fired
+        # remove task from queue if task is queued
         if task in self._pending_tasks:
             self._pending_tasks.pop(task)
-
-        # unprime trigger this task is waiting on
-        # TODO move to Task object
-        trigger = task._trigger
-        if trigger is not None:
-            task._trigger = None
+        # unprime trigger if task is waiting
+        elif task._trigger is not None:
+            trigger, task._trigger = task._trigger, None
             if task in self._trigger2tasks.setdefault(trigger, []):
                 self._trigger2tasks[trigger].remove(task)
             if not self._trigger2tasks[trigger]:
                 trigger._unprime()
                 del self._trigger2tasks[trigger]
+        else:
+            breakpoint()
+            raise InternalError("_unschedule called on Task that was never scheduled")
 
         # Fire Join trigger now that Task has finished
-        # TODO move to Task object
+        # TODO move this logic to Task object
         join = Join(task)
         if join in self._trigger2tasks:
             self._react(join)
 
     def _check_termination(self, task: Task[Any]) -> None:
-        """Like unscheduler but does additional tasks.
+        """Like :meth:`_unschedule` but does additional tasks.
 
         * enters the scheduler termination state if the Test Task is unscheduled.
         * forcefully ends the Test if a Task ends with an exception.
         """
-
-        assert self._test is not None
-
+        # TODO move this logic to Task class
         if task is self._test:
             if _debug:
                 self.log.debug(f"Unscheduling test {task}")
@@ -567,14 +598,10 @@ class Scheduler:
             raise InternalError("Task was queued more than once.")
         self._pending_tasks[task] = outcome
 
-    # def cancel_task(
-    #     self, task: Task[Any], exc: CancelledError
-    # ) -> None:
-    #     if task in self._pending_tasks:
-    #         self._pending_tasks.pop(task)
-    #     else:
-    #         for _, t in self._trigger2tasks.items():
-    #             if t is task:
+    def cancel_task(self, task: Task[Any], exc: _outcomes.Outcome[Any]) -> None:
+        """Reschedules a Task for cancellation."""
+        self._unschedule(task)
+        self._queue(task)
 
     def _queue_function(self, task):
         """Queue a task for execution and move the containing thread
@@ -760,7 +787,6 @@ class Scheduler:
                 if _debug:
                     self.log.debug(f"{task} completed with {task._outcome}")
                 assert result is None
-                self._unschedule(task)
                 self._check_termination(task)
 
             # Don't handle the result if we're shutting down
@@ -840,21 +866,20 @@ class Scheduler:
 
         # reversing seems to fix gh-928, although the order is still somewhat
         # arbitrary.
-        for _, waiting in self._trigger2tasks.items():
+        for _, waiting in tuple(self._trigger2tasks.items()):
             for task in waiting:
                 if _debug:
                     self.log.debug(f"Killing {task}")
-                task.kill()
+                task._cancel_now()
             # we don't unprime trigger here since removing all tasks waiting on
             # the trigger should cause it to be unprimed in _unschedule
         assert not self._trigger2tasks
 
         # Kill any queued coroutines.
-        # We use a while loop because task.kill() calls _unschedule(), which will remove the task from _pending_tasks.
+        # We use a while loop because task._cancel_now() calls _unschedule(), which will remove the task from _pending_tasks.
         # If that happens a for loop will stop early and then the assert will fail.
-        while self._pending_tasks:
-            task, _ = self._pending_tasks.popitem(last=False)
-            task.kill()
+        for task in tuple(self._pending_tasks.keys()):
+            task._cancel_now()
 
         if self._main_thread is not threading.current_thread():
             raise Exception("Cleanup() called outside of the main thread")
