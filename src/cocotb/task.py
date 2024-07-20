@@ -59,7 +59,7 @@ class Task(Generic[ResultType]):
         self._coro: Coroutine = inst
         self._started: bool = False
         self._outcome: Optional[Outcome[ResultType]] = None
-        self._trigger: Optional[cocotb.triggers.Trigger] = None
+        self._trigger_cb: Optional[cocotb.triggers._TriggerCallbackHandle] = None
         self._cancelled: Optional[CancelledError] = None
         self._done_callbacks: List[Callable[[Task[Any]], Any]] = []
 
@@ -96,7 +96,7 @@ class Task(Generic[ResultType]):
             fmt = "<{name} running coro={coro}()>"
         elif self.done():
             fmt = "<{name} finished coro={coro}() outcome={outcome}>"
-        elif self._trigger is not None:
+        elif self._trigger_cb is not None:
             fmt = "<{name} pending coro={coro}() trigger={trigger}>"
         elif not self._started:
             fmt = "<{name} created coro={coro}()>"
@@ -117,7 +117,7 @@ class Task(Generic[ResultType]):
         repr_string = fmt.format(
             name=self.__name__,
             coro=coro_name,
-            trigger=self._trigger,
+            trigger=self._trigger_cb.trigger,
             outcome=self._outcome,
         )
         return repr_string

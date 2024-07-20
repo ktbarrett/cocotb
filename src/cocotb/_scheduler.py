@@ -46,13 +46,11 @@ from typing import Any, Callable, Dict, Union
 import cocotb
 import cocotb._write_scheduler
 from cocotb import _outcomes, _py_compat
-from cocotb._profiling import profiling_context
 from cocotb._utils import remove_traceback_frames
 from cocotb.result import TestSuccess
 from cocotb.task import Task
 from cocotb.triggers import (
     Event,
-    GPITrigger,
     Join,
     NextTimeStep,
     ReadOnly,
@@ -269,73 +267,6 @@ class Scheduler:
         # call complete cb, may schedule another test
         self._test_complete_cb()
 
-    def _sim_react(self, trigger: Trigger) -> None:
-        """Called when a :class:`~cocotb.triggers.GPITrigger` fires.
-
-        This is often the entry point into Python from the simulator,
-        so this function is in charge of enabling profiling.
-        It must also track the current simulator time phase,
-        and start the unstarted event loop.
-        """
-        with profiling_context:
-            # TODO: move state tracking to global variable
-            # and handle this via some kind of trigger-specific Python callback
-            if trigger is self._read_write:
-                cocotb.sim_phase = cocotb.SimPhase.READ_WRITE
-            if trigger is self._read_only:
-                cocotb.sim_phase = cocotb.SimPhase.READ_ONLY
-            elif isinstance(trigger, GPITrigger):
-                cocotb.sim_phase = cocotb.SimPhase.NORMAL
-
-            # apply inertial writes if ReadWrite
-            if trigger is self._read_write:
-                cocotb._write_scheduler.apply_scheduled_writes()
-
-            self._react(trigger)
-            self._event_loop()
-
-    def _react(self, trigger: Trigger) -> None:
-        """Called when a :class:`~cocotb.triggers.Trigger` fires.
-
-        Finds all Tasks waiting on the Trigger that fired and queues them.
-        """
-        if _debug:
-            self.log.debug(f"Trigger fired: {trigger}")
-
-        # find all tasks waiting on trigger that fired
-        try:
-            scheduling = self._trigger2tasks.pop(trigger)
-        except KeyError:
-            # GPI triggers should only be ever pending if there is an
-            # associated task waiting on that trigger, otherwise it would
-            # have been unprimed already
-            if isinstance(trigger, GPITrigger):
-                self.log.critical(f"No tasks waiting on trigger that fired: {trigger}")
-                trigger.log.info("I'm the culprit")
-            # For Python triggers this isn't actually an error - we might do
-            # event.set() without knowing whether any tasks are actually
-            # waiting on this event, for example
-            elif _debug:
-                self.log.debug(f"No tasks waiting on trigger that fired: {trigger}")
-            return
-
-        if _debug:
-            debugstr = "\n\t".join([str(task) for task in scheduling])
-            if len(scheduling) > 0:
-                debugstr = "\n\t" + debugstr
-            self.log.debug(
-                f"{len(scheduling)} pending tasks for trigger {trigger}{debugstr}"
-            )
-
-        # queue all tasks to wake up
-        for task in scheduling:
-            # unset trigger
-            task._trigger = None
-            self._queue(task)
-
-        # This trigger isn't needed any more
-        trigger._unprime()
-
     def _event_loop(self) -> None:
         """Run the main event loop.
 
@@ -386,14 +317,7 @@ class Scheduler:
             self._pending_tasks.pop(task)
 
         # Unprime the trigger this task is waiting on
-        trigger = task._trigger
-        if trigger is not None:
-            task._trigger = None
-            if task in self._trigger2tasks.setdefault(trigger, []):
-                self._trigger2tasks[trigger].remove(task)
-            if not self._trigger2tasks[trigger]:
-                trigger._unprime()
-                del self._trigger2tasks[trigger]
+        task._trigger_cb.cancel()
 
         assert self._test is not None
 
@@ -426,29 +350,15 @@ class Scheduler:
 
     def _resume_task_upon(self, task: Task[Any], trigger: Trigger) -> None:
         """Schedule `task` to be resumed when `trigger` fires."""
-        task._trigger = trigger
+        try:
+            trigger_cb = trigger._prime(self._queue, task)
+            task._trigger_cb = trigger_cb
+        except Exception as e:
+            # discard the trigger we associated, it will never fire
+            self._trigger2tasks.pop(trigger)
 
-        trigger_tasks = self._trigger2tasks.setdefault(trigger, [])
-        trigger_tasks.append(task)
-
-        if not trigger._primed:
-            if trigger_tasks != [task]:
-                # should never happen
-                raise InternalError("More than one task waiting on an unprimed trigger")
-
-            try:
-                # TODO maybe associate the react method with the trigger object so
-                # we don't have to do a type check here.
-                if isinstance(trigger, GPITrigger):
-                    trigger._prime(self._sim_react)
-                else:
-                    trigger._prime(self._react)
-            except Exception as e:
-                # discard the trigger we associated, it will never fire
-                self._trigger2tasks.pop(trigger)
-
-                # replace it with a new trigger that throws back the exception
-                self._queue(task, outcome=_outcomes.Error(e))
+            # replace it with a new trigger that throws back the exception
+            self._queue(task, outcome=_outcomes.Error(e))
 
     def _queue(
         self, task: Task[Any], outcome: _outcomes.Outcome[Any] = _none_outcome
@@ -709,19 +619,6 @@ class Scheduler:
 
         Unprime all pending triggers and kill off any tasks, stop all externals.
         """
-        # copy since we modify this in kill
-        items = list((k, list(v)) for k, v in self._trigger2tasks.items())
-
-        # reversing seems to fix gh-928, although the order is still somewhat
-        # arbitrary.
-        for _, waiting in items[::-1]:
-            for task in waiting:
-                if _debug:
-                    self.log.debug(f"Killing {task}")
-                task.kill()
-            # we don't unprime trigger here since removing all tasks waiting on
-            # the trigger should cause it to be unprimed in _unschedule
-        assert not self._trigger2tasks
 
         # Kill any queued coroutines.
         # We use a while loop because task.kill() calls _unschedule(), which will remove the task from _pending_tasks.
