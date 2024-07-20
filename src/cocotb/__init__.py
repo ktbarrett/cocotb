@@ -37,6 +37,7 @@ from enum import auto
 from types import SimpleNamespace
 from typing import Any, Dict, List, Union, cast
 
+import cocotb._profiling
 import cocotb.handle
 import cocotb.task
 import cocotb.triggers
@@ -296,6 +297,7 @@ def _sim_event(msg: str) -> None:
         log.error(msg)
         _stop_user_coverage()
         _stop_library_coverage()
+        cocotb._profiling.finalize()
 
 
 def _process_plusargs() -> None:
