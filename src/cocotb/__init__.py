@@ -151,7 +151,7 @@ def _task_done_callback(task: "cocotb.task.Task[Any]") -> None:
         task.log.info("Test ended by this task")
         e = remove_traceback_frames(e, ["_task_done_callback", "get"])
         cocotb.regression_manager._abort_test(e)
-    except BaseException as e:
+    except Exception as e:
         task.log.error("Exception raised by this task")
         e = remove_traceback_frames(e, ["_task_done_callback", "get"])
         cocotb.regression_manager._abort_test(e)

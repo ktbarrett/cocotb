@@ -43,8 +43,9 @@ from typing import Any, Callable, Dict
 import cocotb
 import cocotb._write_scheduler
 from cocotb import _outcomes, _py_compat
-from cocotb._exceptions import InternalError
+from cocotb._exceptions import InternalError, TestFailures
 from cocotb._profiling import profiling_context
+from cocotb.result import TestSuccess
 from cocotb.task import Task
 from cocotb.triggers import (
     Event,
@@ -442,7 +443,7 @@ class Scheduler:
             # This function runs in the scheduler thread
             try:
                 _outcome = _outcomes.Value(await task)
-            except BaseException as e:
+            except (TestSuccess, TestFailures, Exception) as e:
                 _outcome = _outcomes.Error(e)
             event.outcome = _outcome
             # Notify the current (scheduler) thread that we are about to wake

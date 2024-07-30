@@ -11,9 +11,11 @@ from typing import Any, Callable, Coroutine, Generator, Generic, List, Optional,
 
 import cocotb
 import cocotb.triggers
+from cocotb._exceptions import TestFailures
 from cocotb._outcomes import Error, Outcome, Value
 from cocotb._py_compat import cached_property
 from cocotb._utils import extract_coro_stack, remove_traceback_frames
+from cocotb.result import TestSuccess
 
 #: Task result type
 ResultType = TypeVar("ResultType")
@@ -137,7 +139,7 @@ class Task(Generic[ResultType]):
             return outcome.send(self._coro)
         except StopIteration as e:
             self._outcome = Value(e.value)
-        except BaseException as e:
+        except (TestSuccess, TestFailures, Exception) as e:
             self._outcome = Error(remove_traceback_frames(e, ["_advance", "send"]))
 
         if self.done():
