@@ -61,7 +61,7 @@ import cocotb._profiling
 import cocotb._scheduler
 import cocotb._write_scheduler
 from cocotb import _ANSI, simulator
-from cocotb._exceptions import InternalError
+from cocotb._exceptions import InternalError, TestFailures
 from cocotb._outcomes import Error
 from cocotb._utils import (
     DocEnum,
@@ -78,20 +78,6 @@ _pdb_on_exception = "COCOTB_PDB_ON_EXCEPTION" in os.environ
 
 
 _logger = logging.getLogger(__name__)
-
-_Failed: Type[BaseException]
-try:
-    import pytest
-except ModuleNotFoundError:
-    _Failed = AssertionError
-else:
-    try:
-        with pytest.raises(Exception):
-            pass
-    except BaseException as _raises_e:
-        _Failed = type(_raises_e)
-    else:
-        assert False, "pytest.raises doesn't raise an exception when it fails"
 
 
 # TODO remove SimFailure once we have functionality in place to abort the test without
@@ -539,7 +525,7 @@ class RegressionManager:
                 msg="passed but we expected a failure",
             )
 
-        elif isinstance(result, (AssertionError, _Failed)) and test.expect_fail:
+        elif isinstance(result, TestFailures) and test.expect_fail:
             self._record_test_passed(
                 wall_time_s=wall_time_s,
                 sim_time_ns=sim_time_ns,

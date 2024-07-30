@@ -42,6 +42,7 @@ import cocotb._profiling
 import cocotb.handle
 import cocotb.task
 import cocotb.triggers
+from cocotb._exceptions import TestFailures
 from cocotb._scheduler import Scheduler
 from cocotb._utils import DocEnum, remove_traceback_frames
 from cocotb.logging import default_config
@@ -146,8 +147,8 @@ def _task_done_callback(task: "cocotb.task.Task[Any]") -> None:
         # throws an error if the background task errored
         # and no one was monitoring it
         task._outcome.get()
-    except (TestSuccess, AssertionError) as e:
-        task.log.info("Test stopped by this task")
+    except (TestSuccess, TestFailures) as e:
+        task.log.info("Test ended by this task")
         e = remove_traceback_frames(e, ["_task_done_callback", "get"])
         cocotb.regression_manager._abort_test(e)
     except BaseException as e:
