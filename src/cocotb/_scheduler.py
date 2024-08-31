@@ -38,7 +38,7 @@ import logging
 import os
 import threading
 from collections import OrderedDict
-from typing import Any, Callable, Dict
+from typing import Any, Dict
 
 import cocotb
 import cocotb._write_scheduler
@@ -215,9 +215,7 @@ class Scheduler:
     _read_only = ReadOnly()
     _none_outcome = _outcomes.Value(None)
 
-    def __init__(self, test_complete_cb: Callable[[], None]) -> None:
-        self._test_complete_cb = test_complete_cb
-
+    def __init__(self) -> None:
         self.log = logging.getLogger("cocotb.scheduler")
         if _debug:
             self.log.setLevel(logging.DEBUG)
@@ -236,22 +234,6 @@ class Scheduler:
         self._main_thread = threading.current_thread()
 
         self._current_task = None
-
-    def _handle_termination(self) -> None:
-        """
-        Handle a termination that causes us to move onto the next test.
-        """
-        if _debug:
-            self.log.debug("Scheduler terminating...")
-
-        # cleanup triggers and tasks
-        self._cleanup()
-
-        # clear state
-        self._terminate = False
-
-        # call complete cb, may schedule another test
-        self._test_complete_cb()
 
     def _sim_react(self, trigger: Trigger) -> None:
         """Called when a :class:`~cocotb.triggers.GPITrigger` fires.
@@ -350,9 +332,10 @@ class Scheduler:
                     )
                 self._pending_events.pop(0).set()
 
-        # no more pending tasks
         if self._terminate:
-            self._handle_termination()
+            if _debug:
+                self.log.debug("Scheduler terminating...")
+            self._cleanup()
         elif _debug:
             self.log.debug("All tasks scheduled, handing control back to simulator")
 

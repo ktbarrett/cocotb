@@ -142,7 +142,7 @@ class Task(Generic[ResultType]):
             self._outcome = Error(remove_traceback_frames(e, ["_advance", "send"]))
 
         if self.done():
-            self._do_done_callbacks()
+            self._shutdown()
 
     def kill(self) -> None:
         """Kill a coroutine."""
@@ -161,9 +161,9 @@ class Task(Generic[ResultType]):
             self._coro.close()
 
         if self.done():
-            self._do_done_callbacks()
+            self._shutdown()
 
-    def _do_done_callbacks(self) -> None:
+    def _shutdown(self) -> None:
         for callback in self._done_callbacks:
             callback(self)
 
@@ -270,21 +270,3 @@ class Task(Generic[ResultType]):
         # Hand the coroutine back to the scheduler trampoline.
         yield self
         return self.result()
-
-
-class _RunningTest(Task[None]):
-    """
-    The result of calling a :class:`cocotb.test` decorated object.
-
-    All this class does is change ``__name__`` to show "Test" instead of "Task".
-
-    .. versionchanged:: 1.8.0
-        Moved to the ``cocotb.task`` module.
-    """
-
-    _name: str = "Test"
-
-    def __init__(self, inst: Coroutine[Any, Any, None], name: str) -> None:
-        super().__init__(inst)
-        self.__name__ = f"{type(self)._name} {name}"
-        self.__qualname__ = self.__name__
