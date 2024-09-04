@@ -71,7 +71,7 @@ class Task(Generic[ResultType]):
         self._coro: Coroutine = inst
         self._state: Task._State = Task._State.UNSTARTED
         self._outcome: Optional[Outcome[ResultType]] = None
-        self._trigger: Optional[cocotb.triggers.Trigger] = None
+        self._trigger: Optional[cocotb.triggers._TriggerCallbackHandle] = None
         self._cancelled_error: Optional[CancelledError] = None
         self._done_callbacks: List[Callable[[Task[Any]], Any]] = []
 
@@ -136,7 +136,7 @@ class Task(Generic[ResultType]):
         )
         return repr_string
 
-    def _advance(self, outcome: Outcome) -> Any:
+    def _advance(self, outcome: Outcome[Any]) -> None:
         """Advance to the next yield in this coroutine.
 
         Args:
@@ -157,7 +157,7 @@ class Task(Generic[ResultType]):
             self._state = Task._State.FINISHED
 
         if self.done():
-            self._do_done_callbacks()
+            self._cleanup()
 
     def kill(self) -> None:
         """Kill a coroutine."""
@@ -175,9 +175,14 @@ class Task(Generic[ResultType]):
         self._coro.close()
 
         self._state = Task._State.FINISHED
-        self._do_done_callbacks()
+        self._cleanup()
 
-    def _do_done_callbacks(self) -> None:
+    def _cleanup(self) -> None:
+        # Unprime the trigger this task is waiting on
+        if self._trigger is not None:
+            self._trigger.cancel()
+            self._trigger = None
+        # Do done callbacks
         for callback in self._done_callbacks:
             callback(self)
 
@@ -288,8 +293,7 @@ class Task(Generic[ResultType]):
         # decorator from your `async` functions.
 
         # Hand the coroutine back to the scheduler trampoline.
-        yield self
-        return self.result()
+        return (yield from cocotb.triggers._Join(self).__await__())
 
 
 class _RunningTest(Task[None]):
@@ -308,3 +312,76 @@ class _RunningTest(Task[None]):
         super().__init__(inst)
         self.__name__ = f"{type(self)._name} {name}"
         self.__qualname__ = self.__name__
+
+
+"""
+    # This collection of functions parses a trigger out of the object
+    # that was yielded by a task, converting `list` -> `Waitable`,
+    # `Waitable` -> `Task`, `Task` -> `Trigger`.
+    # Doing them as separate functions allows us to avoid repeating unnecessary
+    # `isinstance` checks.
+
+    def _trigger_from_started_task(self, result: Task) -> Trigger:
+        if _debug:
+            self.log.debug(f"Joining to already running task: {result}")
+        return _Join(result)
+
+    def _trigger_from_unstarted_task(self, result: Task) -> Trigger:
+        self._queue(result)
+        if _debug:
+            self.log.debug(f"Scheduling unstarted task: {result!r}")
+        return _Join(result)
+
+    def _trigger_from_any(self, result) -> Trigger:
+        # note: the order of these can significantly impact performance
+
+        if isinstance(result, Trigger):
+            return result
+
+        if isinstance(result, Task):
+            if not result.has_started() and result not in self._pending_tasks:
+                return self._trigger_from_unstarted_task(result)
+            else:
+                return self._trigger_from_started_task(result)
+
+        raise TypeError(
+            f"Coroutine yielded an object of type {type(result)}, which the scheduler can't "
+            f"handle: {result!r}\n"
+        )
+
+    def _resume_task_upon(self, task: Task[Any], trigger: Trigger) -> None:
+        task._trigger = trigger
+
+            try:
+            except Exception as e:
+                # discard the trigger we associated, it will never fire
+                self._trigger2tasks.pop(trigger)
+
+                # replace it with a new trigger that throws back the exception
+                self._queue(task, outcome=_outcomes.Error(e))
+
+
+        elif _Join(task) in self._trigger2tasks:
+            self._react(_Join(task))
+
+    if not task.done():
+        if _debug:
+            self.log.debug(f"{task!r} yielded {result} ({cocotb.sim_phase})")
+        try:
+            result = self._trigger_from_any(result)
+        except TypeError as exc:
+            # restart this task with an exception object telling it that
+            # it wasn't allowed to yield that
+            self._queue(task, _outcomes.Error(exc))
+        else:
+            self._resume_task_upon(task, result)
+
+
+
+        # Unprime the trigger this task is waiting on
+        # TODO move to Task?
+        trigger = task._trigger
+        if trigger is not None:
+            task._trigger = None
+            trigger.cancel()
+"""

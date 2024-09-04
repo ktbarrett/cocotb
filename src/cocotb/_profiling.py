@@ -9,19 +9,7 @@ import os
 import pstats
 from typing import Union
 
-from cocotb._py_compat import nullcontext
-
-_profile: Union[cProfile.Profile, None]
-
-
-class _profiling_context:
-    """Context manager that profiles its contents"""
-
-    def __enter__(self):
-        _profile.enable()
-
-    def __exit__(self, *excinfo):
-        _profile.disable()
+_profile: Union[cProfile.Profile, None] = None
 
 
 if "COCOTB_ENABLE_PROFILING" in os.environ:
@@ -31,12 +19,17 @@ if "COCOTB_ENABLE_PROFILING" in os.environ:
         ps = pstats.Stats(_profile).sort_stats("cumulative")
         ps.dump_stats("cocotb.pstat")
 
-    profiling_context = _profiling_context()
+    enable = _profile.enable
+
+    disable = _profile.disable
 
 else:
-    _profile = None
 
     def finalize() -> None:
         pass
 
-    profiling_context = nullcontext()
+    def enable() -> None:
+        pass
+
+    def disable() -> None:
+        pass
