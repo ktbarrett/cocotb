@@ -136,7 +136,7 @@ class Task(Generic[ResultType]):
         )
         return repr_string
 
-    def _advance(self, outcome: Outcome) -> Any:
+    def _advance(self, outcome: Outcome) -> None:
         """Advance to the next yield in this coroutine.
 
         Args:
@@ -148,16 +148,23 @@ class Task(Generic[ResultType]):
         """
         try:
             self._state = Task._State.RUNNING
-            return outcome.send(self._coro)
+            result = outcome.send(self._coro)
         except StopIteration as e:
             self._outcome = Value(e.value)
             self._state = Task._State.FINISHED
+            self._do_done_callbacks()
         except BaseException as e:
             self._outcome = Error(remove_traceback_frames(e, ["_advance", "send"]))
             self._state = Task._State.FINISHED
-
-        if self.done():
             self._do_done_callbacks()
+        else:
+            if isinstance(result, cocotb.triggers.Trigger):
+                cocotb._scheduler_inst._resume_task_upon(self, result)
+            else:
+                error = Error(
+                    TypeError(f"Expected a Trigger, got a {type(result).__qualname__}")
+                )
+                cocotb._scheduler_inst._queue(self, error)
 
     def kill(self) -> None:
         """Kill a coroutine."""
@@ -280,15 +287,10 @@ class Task(Generic[ResultType]):
         self._done_callbacks.append(callback)
 
     def __await__(self) -> Generator[Any, Any, ResultType]:
-        # It's tempting to use `return (yield from self._coro)` here,
-        # which bypasses the scheduler. Unfortunately, this means that
-        # we can't keep track of the result or state of the coroutine,
-        # things which we expose in our public API. If you want the
-        # efficiency of bypassing the scheduler, remove the `@coroutine`
-        # decorator from your `async` functions.
-
-        # Hand the coroutine back to the scheduler trampoline.
-        yield self
+        # start Task if not done so
+        if self._state is Task._State.UNSTARTED:
+            cocotb._scheduler_inst._queue(self)
+        yield cocotb.triggers._Join(self)
         return self.result()
 
 

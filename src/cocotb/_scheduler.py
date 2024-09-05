@@ -505,42 +505,6 @@ class Scheduler:
 
         return wrapper()
 
-    # This collection of functions parses a trigger out of the object
-    # that was yielded by a task, converting `list` -> `Waitable`,
-    # `Waitable` -> `Task`, `Task` -> `Trigger`.
-    # Doing them as separate functions allows us to avoid repeating unnecessary
-    # `isinstance` checks.
-
-    def _trigger_from_started_task(self, result: Task) -> Trigger:
-        if _debug:
-            self.log.debug(f"Joining to already running task: {result}")
-        return _Join(result)
-
-    def _trigger_from_unstarted_task(self, result: Task) -> Trigger:
-        self._queue(result)
-        if _debug:
-            self.log.debug(f"Scheduling unstarted task: {result!r}")
-        return _Join(result)
-
-    def _trigger_from_any(self, result) -> Trigger:
-        """Convert a yielded object into a Trigger instance"""
-        # note: the order of these can significantly impact performance
-
-        if isinstance(result, Trigger):
-            return result
-
-        # TODO move this into Task
-        if isinstance(result, Task):
-            if result._state is Task._State.UNSTARTED:
-                return self._trigger_from_unstarted_task(result)
-            else:
-                return self._trigger_from_started_task(result)
-
-        raise TypeError(
-            f"Coroutine yielded an object of type {type(result)}, which the scheduler can't "
-            f"handle: {result!r}\n"
-        )
-
     def _schedule(self, task: Task, outcome: _outcomes.Outcome[Any]) -> None:
         """Schedule *task* with *outcome*.
 
@@ -559,29 +523,16 @@ class Scheduler:
         try:
             self._current_task = task
 
-            result = task._advance(outcome=outcome)
+            task._advance(outcome=outcome)
 
             if task.done():
                 if _debug:
                     self.log.debug(f"{task} completed with {task._outcome}")
-                assert result is None
                 self._unschedule(task)
 
             # Don't handle the result if we're shutting down
             if self._terminate:
                 return
-
-            if not task.done():
-                if _debug:
-                    self.log.debug(f"{task!r} yielded {result} ({cocotb.sim_phase})")
-                try:
-                    result = self._trigger_from_any(result)
-                except TypeError as exc:
-                    # restart this task with an exception object telling it that
-                    # it wasn't allowed to yield that
-                    self._queue(task, _outcomes.Error(exc))
-                else:
-                    self._resume_task_upon(task, result)
 
             # We do not return from here until pending threads have completed, but only
             # from the main thread, this seems like it could be problematic in cases
