@@ -293,6 +293,34 @@ class Task(Generic[ResultType]):
         yield cocotb.triggers._Join(self)
         return self.result()
 
+    def _resume_task_upon(self, trigger: Trigger) -> None:
+        """Schedule `task` to be resumed when `trigger` fires."""
+        # TODO Move this all into Task
+        task._trigger = trigger
+        task._state = Task._State.PENDING
+
+        trigger_tasks = self._trigger2tasks.setdefault(trigger, [])
+        trigger_tasks.append(task)
+
+        if not trigger._primed:
+            if trigger_tasks != [task]:
+                # should never happen
+                raise InternalError("More than one task waiting on an unprimed trigger")
+
+            try:
+                # TODO maybe associate the react method with the trigger object so
+                # we don't have to do a type check here.
+                if isinstance(trigger, GPITrigger):
+                    trigger._prime(self._sim_react)
+                else:
+                    trigger._prime(self._react)
+            except Exception as e:
+                # discard the trigger we associated, it will never fire
+                self._trigger2tasks.pop(trigger)
+
+                # replace it with a new trigger that throws back the exception
+                self._queue(task, outcome=_outcomes.Error(e))
+
 
 class _RunningTest(Task[None]):
     """
