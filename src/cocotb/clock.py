@@ -31,7 +31,7 @@ import logging
 from decimal import Decimal
 from fractions import Fraction
 from logging import Logger
-from typing import Union
+from typing import ClassVar, Optional, Union
 
 from cocotb._py_compat import cached_property
 from cocotb._write_scheduler import trust_inertial
@@ -121,12 +121,15 @@ class Clock:
         Passing ``None`` as the *units* argument was removed, use ``'step'`` instead.
     """
 
+    setimmediate: ClassVar[bool] = False
+
     def __init__(
         self,
         signal,
         period: Union[float, Fraction, Decimal],
         units: str = "step",
         impl: str = "auto",
+        setimmediate: Optional[bool] = None,
     ):
         self.signal = signal
         self.period = get_sim_steps(period, units)
@@ -140,6 +143,14 @@ class Clock:
         if impl == "auto":
             impl = "gpi" if trust_inertial else "py"
         self.impl = impl
+
+        if setimmediate is not None:
+            self.setimmediate = setimmediate
+
+        if self.setimmediate:
+            self.set = self.signal.setimmediatevalue
+        else:
+            self.set = self.signal.set
 
     async def start(self, start_high: bool = True) -> None:
         r"""Clocking coroutine.  Start driving your clock by :func:`cocotb.start`\ ing a
@@ -161,7 +172,7 @@ class Clock:
 
         if self.impl == "gpi":
             clkobj = clock_create(self.signal._handle)
-            clkobj.start(self.period, t_high, start_high)
+            clkobj.start(self.period, t_high, start_high, self.setimmediate)
 
             try:
                 # The clock is meant to toggle forever, so awaiting this should
@@ -175,12 +186,12 @@ class Clock:
             timer_high = Timer(t_high)
             timer_low = Timer(self.period - t_high)
             if start_high:
-                self.signal.value = 1
+                self.set(1)
                 await timer_high
             while True:
-                self.signal.value = 0
+                self.set(0)
                 await timer_low
-                self.signal.value = 1
+                self.set(1)
                 await timer_high
 
     def __str__(self) -> str:

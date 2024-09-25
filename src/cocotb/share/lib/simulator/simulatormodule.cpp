@@ -796,7 +796,8 @@ class GpiClock {
     //  - EBUSY if the clock was already started (stop first)
     //  - EINVAL if the parameters are invalid
     //  - EAGAIN if registering the toggle callback failed
-    int start(uint64_t period_steps, uint64_t high_steps, bool start_high);
+    int start(uint64_t period_steps, uint64_t high_steps, bool start_high,
+              bool setimmediate);
 
     int stop();
 
@@ -806,6 +807,7 @@ class GpiClock {
 
     uint64_t period = 0;
     uint64_t t_high = 0;
+    bool setimmediate = 0;
 
     int clk_val = 0;
 
@@ -813,8 +815,8 @@ class GpiClock {
     static int toggle_cb(void *gpi_clk);
 };
 
-int GpiClock::start(uint64_t period_steps, uint64_t high_steps,
-                    bool start_high) {
+int GpiClock::start(uint64_t period_steps, uint64_t high_steps, bool start_high,
+                    bool setimmediate) {
     if (clk_toggle_cb_hdl) {
         return EBUSY;
     }
@@ -825,6 +827,7 @@ int GpiClock::start(uint64_t period_steps, uint64_t high_steps,
 
     period = period_steps;
     t_high = high_steps;
+    setimmediate = setimmediate;
 
     clk_val = start_high;
     return toggle(true);
@@ -843,7 +846,8 @@ int GpiClock::toggle(bool initialSet) {
     if (!initialSet) {
         clk_val = !clk_val;
     }
-    gpi_set_signal_value_int(clk_signal, clk_val, GPI_DEPOSIT);
+    auto set_action = setimmediate ? GPI_NO_DELAY : GPI_DEPOSIT;
+    gpi_set_signal_value_int(clk_signal, clk_val, set_action);
 
     uint64_t to_next_edge = clk_val ? t_high : (period - t_high);
 
@@ -922,13 +926,14 @@ static void clock_dealloc(PyObject *self) {
 
 static PyObject *clk_start(gpi_hdl_Object<gpi_clk_hdl> *self, PyObject *args) {
     unsigned long long period, t_high;
-    int start_high;
+    int start_high, setimmediate;
 
-    if (!PyArg_ParseTuple(args, "KKp:start", &period, &t_high, &start_high)) {
+    if (!PyArg_ParseTuple(args, "KKpp:start", &period, &t_high, &start_high,
+                          &setimmediate)) {
         return NULL;
     }
 
-    int ret = self->hdl->start(period, t_high, start_high);
+    int ret = self->hdl->start(period, t_high, start_high, setimmediate);
 
     if (ret != 0) {
         if (ret == EINVAL) {
@@ -1345,9 +1350,10 @@ PyTypeObject gpi_hdl_Object<gpi_cb_hdl>::py_type = []() -> PyTypeObject {
 static PyMethodDef gpi_clk_methods[] = {
     {"start", (PyCFunction)clk_start, METH_VARARGS,
      PyDoc_STR(
-         "start($self, period_steps, high_steps, start_high)\n"
+         "start($self, period_steps, high_steps, start_high, setimmediate)\n"
          "--\n\n"
-         "start(period_steps: int, high_steps: int, start_high: bool) -> None\n"
+         "start(period_steps: int, high_steps: int, start_high: bool, "
+         "setimmediate: bool) -> None\n"
          "Start this clock now.\n"
          "\n"
          "The clock will have a period of *period_steps* time steps, "
@@ -1355,6 +1361,8 @@ static PyMethodDef gpi_clk_methods[] = {
          "If *start_high* is ``True``, start at the beginning of the high "
          "state, "
          "otherwise start at the beginning of the low state.\n"
+         "If *setimmediate* is ``True``, update the clock signal immeidately "
+         "and not inertially.\n"
          "\n"
          "Raises:\n"
          "    TypeError: If there are an incorrect number of arguments or "

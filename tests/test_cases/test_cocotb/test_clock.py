@@ -97,7 +97,7 @@ async def test_gpi_clock_error_params(dut):
 @cocotb.test(expect_error=ValueError)
 async def test_gpi_clock_error_timing(dut):
     clk = clock_create(dut.clk._handle)
-    clk.start(2, 3, True)
+    clk.start(2, 3, True, False)
 
 
 @cocotb.test(expect_error=ValueError)
@@ -109,9 +109,9 @@ async def test_gpi_clock_error_start(dut):
 @cocotb.test(expect_error=RuntimeError)
 async def test_gpi_clock_error_already_started(dut):
     clk = clock_create(dut.clk._handle)
-    clk.start(2, 1, True)
+    clk.start(2, 1, True, False)
     try:
-        clk.start(2, 1, True)
+        clk.start(2, 1, True, False)
     finally:
         clk.stop()
 
