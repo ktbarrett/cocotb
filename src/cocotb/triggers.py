@@ -41,6 +41,7 @@ from typing import (
     Generator,
     Generic,
     List,
+    NoReturn,
     Optional,
     Type,
     TypeVar,
@@ -52,7 +53,6 @@ from typing import (
 import cocotb.handle
 import cocotb.task
 from cocotb import simulator
-from cocotb._deprecation import deprecated
 from cocotb._outcomes import Error, Outcome, Value
 from cocotb._py_compat import cached_property
 from cocotb._utils import delegating_new, remove_traceback_frames, singleton
@@ -750,13 +750,8 @@ class Join(Trigger, Generic[T]):
         Using ``task`` directly is prefered to ``Join(task)`` in all situations where the latter could be used.
     """
 
-    _task: "cocotb.task.Task[T]"
-
-    @deprecated(
-        "Using `task` directly is prefered to `Join(task)` in all situations where the latter could be used."
-    )
-    def __new__(cls, task: "cocotb.task.Task[T]") -> "Join[T]":
-        return task._join
+    def __new__(cls, task: "cocotb.task.Task[T]") -> NoReturn:
+        raise Exception("`Join(task)` is deprecated, use `await task` directly.")
 
     def __init__(self, task: "cocotb.task.Task[T]") -> None:
         super().__init__()
@@ -771,9 +766,8 @@ class Join(Trigger, Generic[T]):
     def __repr__(self) -> str:
         return f"{type(self).__qualname__}({self._task!s})"
 
-    def __await__(self) -> Generator[Any, Any, T]:
-        yield from super().__await__()
-        return self._task.result()
+    def __call__(self) -> NoReturn:
+        raise Exception("`task.join()` is deprecated, use `await task` directly.")
 
 
 class Waitable(Awaitable[T]):

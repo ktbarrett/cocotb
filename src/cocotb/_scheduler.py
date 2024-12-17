@@ -381,8 +381,8 @@ class Scheduler:
         if self._terminate:
             return
 
-        elif task._join in self._trigger2tasks:
-            self._react(task._join)
+        elif task.join in self._trigger2tasks:
+            self._react(task.join)
 
     def _schedule_task_upon(self, task: Task[Any], trigger: Trigger) -> None:
         """Schedule `task` to be resumed when `trigger` fires."""
@@ -513,13 +513,13 @@ class Scheduler:
     def _trigger_from_started_task(self, result: Task) -> Trigger:
         if _debug:
             self.log.debug(f"Joining to already running task: {result}")
-        return result._join
+        return result.join
 
     def _trigger_from_unstarted_task(self, result: Task) -> Trigger:
         self._schedule_task(result)
         if _debug:
             self.log.debug(f"Scheduling unstarted task: {result!r}")
-        return result._join
+        return result.join
 
     def _trigger_from_any(self, result) -> Trigger:
         """Convert a yielded object into a Trigger instance"""

@@ -143,7 +143,7 @@ def _task_done_callback(task: "cocotb.task.Task[Any]") -> None:
     if task.cancelled():
         return
     # if there's a Task awaiting this one, don't fail
-    if task._join in cocotb._scheduler_inst._trigger2tasks:
+    if task.join in cocotb._scheduler_inst._trigger2tasks:
         return
     # if no failure, do nothing
     e = task.exception()

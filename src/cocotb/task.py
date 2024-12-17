@@ -12,7 +12,6 @@ from typing import Any, Callable, Coroutine, Generator, Generic, List, Optional,
 
 import cocotb
 import cocotb.triggers
-from cocotb._deprecation import deprecated
 from cocotb._outcomes import Error, Outcome, Value
 from cocotb._py_compat import cached_property
 from cocotb._utils import DocEnum, extract_coro_stack, remove_traceback_frames
@@ -186,29 +185,8 @@ class Task(Generic[ResultType]):
         for callback in self._done_callbacks:
             callback(self)
 
-    @deprecated(
-        "Using `task` directly is prefered to `task.join()` in all situations where the latter could be used.`"
-    )
-    def join(self) -> "cocotb.triggers.Join[ResultType]":
-        """Wait for the task to complete.
-
-        Returns:
-            A :class:`~cocotb.triggers.Join` trigger which, if awaited, will block until the given Task completes.
-
-        .. code-block:: python3
-
-            my_task = cocotb.start_soon(my_coro())
-            await my_task.join()
-            # "my_task" is done here
-
-        .. deprecated:: 2.0
-
-            Using ``task`` directly is prefered to ``task.join()`` in all situations where the latter could be used.
-        """
-        return self._join
-
     @cached_property
-    def _join(self) -> "cocotb.triggers.Join[ResultType]":
+    def join(self) -> "cocotb.triggers.Join[ResultType]":
         return cocotb.triggers.Join._make(self)
 
     def cancel(self, msg: Optional[str] = None) -> None:

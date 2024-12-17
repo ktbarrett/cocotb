@@ -84,7 +84,7 @@ async def test_join_trigger_deprecated(_) -> None:
         pass
 
     t = cocotb.start_soon(noop())
-    with pytest.warns(DeprecationWarning, match=r"Join\(task\)"):
+    with pytest.raises(Exception, match=r"Join\(task\)"):
         await Join(t)
 
 
@@ -94,5 +94,5 @@ async def test_task_join_deprecated(_) -> None:
         pass
 
     t = cocotb.start_soon(noop())
-    with pytest.warns(DeprecationWarning, match=r"task.join\(\)"):
+    with pytest.raises(Exception, match=r"task.join\(\)"):
         await t.join()
