@@ -1277,6 +1277,7 @@ _type2cls: Dict[int, Type[_ConcreteHandleTypes]] = {
     simulator.STRUCTURE: HierarchyObject,
     simulator.PACKED_STRUCTURE: LogicObject,
     simulator.LOGIC: LogicObject,
+    simulator.LOGIC_ARRAY: LogicObject,
     simulator.NETARRAY: ArrayObject[Any, ValueObjectBase[Any, Any]],
     simulator.REAL: RealObject,
     simulator.INTEGER: IntegerObject,

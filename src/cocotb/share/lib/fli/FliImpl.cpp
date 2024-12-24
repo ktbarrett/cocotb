@@ -197,7 +197,7 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(void *hdl,
                     case MTI_TYPE_ENUM:
                         if (isValueLogic(elemType)) {
                             new_obj = new FliLogicObjHdl(
-                                this, hdl, GPI_LOGIC, is_const, accType,
+                                this, hdl, GPI_LOGIC_ARRAY, is_const, accType,
                                 accFullType, is_var, valType,
                                 typeKind);  // std_logic_vector
                         } else if (isValueChar(elemType)) {
@@ -421,8 +421,8 @@ GpiObjHdl *FliImpl::native_check_create(int32_t index, GpiObjHdl *parent) {
 
         return create_gpi_obj_from_handle(hdl, name, fq_name, accType,
                                           accFullType);
-    } else if (obj_type == GPI_LOGIC || obj_type == GPI_ARRAY ||
-               obj_type == GPI_STRING) {
+    } else if (obj_type == GPI_LOGIC || obj_type == GPI_LOGIC_ARRAY ||
+               obj_type == GPI_ARRAY || obj_type == GPI_STRING) {
         FliValueObjHdl *fli_obj = reinterpret_cast<FliValueObjHdl *>(parent);
 
         LOG_DEBUG("Looking for index %u from %s", index,

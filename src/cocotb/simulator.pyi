@@ -12,6 +12,7 @@ GENARRAY: int
 INTEGER: int
 LOADS: int
 LOGIC: int
+LOGIC_ARRAY: int
 MEMORY: int
 MODULE: int
 NETARRAY: int

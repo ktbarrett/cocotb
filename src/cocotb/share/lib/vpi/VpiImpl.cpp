@@ -101,17 +101,20 @@ const char *VpiImpl::get_simulator_version() {
     return m_version.c_str();
 }
 
-static gpi_objtype_t to_gpi_objtype(int32_t vpitype) {
+static gpi_objtype_t to_gpi_objtype(int32_t vpitype, bool is_vector = false) {
     switch (vpitype) {
         case vpiNet:
         case vpiNetBit:
-            return GPI_LOGIC;
-
         case vpiBitVar:
         case vpiReg:
         case vpiRegBit:
         case vpiMemoryWord:
-            return GPI_LOGIC;
+            if (is_vector) {
+                return GPI_LOGIC_ARRAY;
+            } else {
+                return GPI_LOGIC;
+            }
+            break;
 
         case vpiRealNet:
         case vpiRealVar:
@@ -220,10 +223,12 @@ GpiObjHdl *VpiImpl::create_gpi_obj_from_handle(vpiHandle new_hdl,
         case vpiRealNet:
         case vpiStringVar:
         case vpiMemoryWord:
-        case vpiInterconnectNet:
-            new_obj =
-                new VpiSignalObjHdl(this, new_hdl, to_gpi_objtype(type), false);
+        case vpiInterconnectNet: {
+            const auto is_vector = vpi_get(vpiVector, new_hdl);
+            new_obj = new VpiSignalObjHdl(
+                this, new_hdl, to_gpi_objtype(type, is_vector), false);
             break;
+        }
         case vpiParameter:
         case vpiConstant: {
             auto const_type = vpi_get(vpiConstType, new_hdl);
@@ -237,21 +242,29 @@ GpiObjHdl *VpiImpl::create_gpi_obj_from_handle(vpiHandle new_hdl,
         case vpiPackedArrayVar:
         case vpiPackedArrayNet:
         case vpiMemory:
-        case vpiInterconnectArray:
-            new_obj = new VpiArrayObjHdl(this, new_hdl, to_gpi_objtype(type));
+        case vpiInterconnectArray: {
+            const auto is_vector = vpi_get(vpiVector, new_hdl);
+            new_obj = new VpiArrayObjHdl(this, new_hdl,
+                                         to_gpi_objtype(type, is_vector));
             break;
+        }
         case vpiStructVar:
         case vpiStructNet:
         case vpiUnionVar:
-        case vpiUnionNet:
+        case vpiUnionNet: {
+            auto is_vector = false;
             if (vpi_get(vpiPacked, new_hdl)) {
                 LOG_DEBUG("VPI: Found packed struct/union data type");
                 new_obj = new VpiSignalObjHdl(this, new_hdl,
                                               GPI_PACKED_STRUCTURE, false);
                 break;
+            } else if (vpi_get(vpiVector, new_hdl)) {
+                is_vector = true;
             }
-            new_obj = new VpiObjHdl(this, new_hdl, to_gpi_objtype(type));
+            new_obj =
+                new VpiObjHdl(this, new_hdl, to_gpi_objtype(type, is_vector));
             break;
+        }
         case vpiModule:
         case vpiInterface:
         case vpiModport:
@@ -456,8 +469,8 @@ GpiObjHdl *VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent) {
         writable.push_back('\0');
 
         new_hdl = vpi_handle_by_name(&writable[0], NULL);
-    } else if (obj_type == GPI_LOGIC || obj_type == GPI_ARRAY ||
-               obj_type == GPI_STRING) {
+    } else if (obj_type == GPI_LOGIC || obj_type == GPI_LOGIC_ARRAY ||
+               obj_type == GPI_ARRAY || obj_type == GPI_STRING) {
         new_hdl = vpi_handle_by_index(vpi_hdl, index);
 
         /* vpi_handle_by_index() doesn't work for all simulators when dealing

@@ -342,7 +342,7 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(vhpiHandleT new_hdl,
                         if (is_enum_logic(elem_base_type_hdl)) {
                             LOG_DEBUG("VHPI: Detected a LOGIC VECTOR type %s",
                                       fq_name.c_str());
-                            gpi_type = GPI_LOGIC;
+                            gpi_type = GPI_LOGIC_ARRAY;
                         } else if (is_enum_char(elem_base_type_hdl)) {
                             LOG_DEBUG("VHPI: Detected a STRING type %s",
                                       fq_name.c_str());
@@ -466,7 +466,7 @@ GpiObjHdl *VhpiImpl::create_gpi_obj_from_handle(vhpiHandleT new_hdl,
 
     if (gpi_type != GPI_ARRAY && gpi_type != GPI_GENARRAY &&
         gpi_type != GPI_MODULE && gpi_type != GPI_STRUCTURE) {
-        if (gpi_type == GPI_LOGIC)
+        if (gpi_type == GPI_LOGIC || gpi_type == GPI_LOGIC_ARRAY)
             new_obj = new VhpiLogicSignalObjHdl(this, new_hdl, gpi_type,
                                                 is_const(new_hdl));
         else
@@ -633,8 +633,8 @@ GpiObjHdl *VhpiImpl::native_check_create(int32_t index, GpiObjHdl *parent) {
         writable.push_back('\0');
 
         new_hdl = vhpi_handle_by_name(&writable[0], NULL);
-    } else if (obj_type == GPI_LOGIC || obj_type == GPI_ARRAY ||
-               obj_type == GPI_STRING) {
+    } else if (obj_type == GPI_LOGIC || obj_type == GPI_LOGIC_ARRAY ||
+               obj_type == GPI_ARRAY || obj_type == GPI_STRING) {
         LOG_DEBUG("VHPI: Native check create for index %d of parent %s (%s)",
                   index, parent->get_fullname_str(),
                   vhpi_get_str(vhpiKindStrP, vhpi_hdl));
