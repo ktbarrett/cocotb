@@ -428,31 +428,31 @@ async def type_check_verilog(dut):
     """
 
     test_handles = [
-        (dut.stream_in_ready, "GPI_REGISTER"),
+        (dut.stream_in_ready, "GPI_LOGIC"),
         (dut.register_array, "GPI_ARRAY"),
-        (dut.temp, "GPI_REGISTER"),
-        (dut.logic_b, "GPI_REGISTER"),
-        (dut.logic_c, "GPI_REGISTER"),
-        (dut.INT_PARAM, "GPI_REGISTER"),
+        (dut.temp, "GPI_LOGIC"),
+        (dut.logic_b, "GPI_LOGIC"),
+        (dut.logic_c, "GPI_LOGIC"),
+        (dut.INT_PARAM, "GPI_LOGIC"),
         (dut.REAL_PARAM, "GPI_REAL"),
     ]
 
     if SIM_NAME.startswith("icarus"):
         test_handles.append(
-            (dut.logic_a, "GPI_NET")
+            (dut.logic_a, "GPI_LOGIC")
         )  # https://github.com/steveicarus/iverilog/issues/312
     else:
-        test_handles.append((dut.logic_a, "GPI_REGISTER"))
+        test_handles.append((dut.logic_a, "GPI_LOGIC"))
 
     # Verilator returns vpiReg rather than vpiNet
     # Verilator (correctly) treats parameters with implicit type, that are assigned a string literal value, as an unsigned integer. See IEEE 1800-2017 Section 5.9 and Section 6.20.2
     if SIM_NAME.startswith("verilator"):
-        test_handles.append((dut.stream_in_data, "GPI_REGISTER"))
-        test_handles.append((dut.and_output, "GPI_REGISTER"))
-        test_handles.append((dut.STRING_PARAM, "GPI_REGISTER"))
+        test_handles.append((dut.stream_in_data, "GPI_LOGIC"))
+        test_handles.append((dut.and_output, "GPI_LOGIC"))
+        test_handles.append((dut.STRING_PARAM, "GPI_LOGIC"))
     else:
-        test_handles.append((dut.stream_in_data, "GPI_NET"))
-        test_handles.append((dut.and_output, "GPI_NET"))
+        test_handles.append((dut.stream_in_data, "GPI_LOGIC"))
+        test_handles.append((dut.and_output, "GPI_LOGIC"))
         test_handles.append((dut.STRING_PARAM, "GPI_STRING"))
 
     for handle in test_handles:

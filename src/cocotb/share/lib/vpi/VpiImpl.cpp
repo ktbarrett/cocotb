@@ -105,13 +105,13 @@ static gpi_objtype_t to_gpi_objtype(int32_t vpitype) {
     switch (vpitype) {
         case vpiNet:
         case vpiNetBit:
-            return GPI_NET;
+            return GPI_LOGIC;
 
         case vpiBitVar:
         case vpiReg:
         case vpiRegBit:
         case vpiMemoryWord:
-            return GPI_REGISTER;
+            return GPI_LOGIC;
 
         case vpiRealNet:
         case vpiRealVar:
@@ -174,14 +174,14 @@ static gpi_objtype_t const_type_to_gpi_objtype(int32_t const_type) {
             LOG_WARN(
                 "VPI: Xcelium reports undefined parameters as vpiUndefined, "
                 "guessing this is a logic vector");
-            return GPI_REGISTER;
+            return GPI_LOGIC;
 #endif
         case vpiDecConst:
         case vpiBinaryConst:
         case vpiOctConst:
         case vpiHexConst:
         case vpiIntConst:
-            return GPI_REGISTER;
+            return GPI_LOGIC;
         case vpiRealConst:
             return GPI_REAL;
         case vpiStringConst:
@@ -456,8 +456,8 @@ GpiObjHdl *VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent) {
         writable.push_back('\0');
 
         new_hdl = vpi_handle_by_name(&writable[0], NULL);
-    } else if (obj_type == GPI_REGISTER || obj_type == GPI_NET ||
-               obj_type == GPI_ARRAY || obj_type == GPI_STRING) {
+    } else if (obj_type == GPI_LOGIC || obj_type == GPI_ARRAY ||
+               obj_type == GPI_STRING) {
         new_hdl = vpi_handle_by_index(vpi_hdl, index);
 
         /* vpi_handle_by_index() doesn't work for all simulators when dealing
@@ -540,7 +540,7 @@ GpiObjHdl *VpiImpl::native_check_create(int32_t index, GpiObjHdl *parent) {
     } else {
         LOG_ERROR(
             "VPI: Parent of type %s must be of type GPI_GENARRAY, "
-            "GPI_REGISTER, GPI_NET, GPI_ARRAY, or GPI_STRING to have an index.",
+            "GPI_LOGIC, GPI_LOGIC, GPI_ARRAY, or GPI_STRING to have an index.",
             parent->get_type_str());
         return NULL;
     }
