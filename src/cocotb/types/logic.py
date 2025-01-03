@@ -247,3 +247,6 @@ class Logic:
 
     def __index__(self) -> int:
         return int(self)
+
+    # def __class_getitem__(self, item: Union[int, slice]) -> "cocotb.types.packed_struct.PackedArray[Logic]":
+    #     ...
