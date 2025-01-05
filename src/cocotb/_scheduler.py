@@ -446,6 +446,10 @@ class Scheduler:
             # This function runs in the scheduler thread
             try:
                 _outcome = _outcomes.Value(await task)
+            except (KeyboardInterrupt, SystemExit):
+                # Allow these to bubble up to the execution root to fail the sim immediately.
+                # This follow's asyncio's behvaior.
+                raise
             except BaseException as e:
                 _outcome = _outcomes.Error(e)
             event.outcome = _outcome
