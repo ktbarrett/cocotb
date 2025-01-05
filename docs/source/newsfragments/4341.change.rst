@@ -1,0 +1,1 @@
+:any:`.Join` and :meth:`.Task.join` now return the Task to be joined instead of a Trigger. This preserve backwards compatibility for ``await join`` or using the result in :class:`First` or :class:`Combine`.

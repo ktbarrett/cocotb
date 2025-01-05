@@ -1,0 +1,1 @@
+Added :class:`.TaskComplete` Trigger and :attr:`.Task.complete` to get that Trigger for the Task. These are intended to replace :any:`.Join` and :meth:`.Task.join` and do not return the Tasks result when ``await``\ ed.

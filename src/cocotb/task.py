@@ -8,7 +8,16 @@ import os
 import warnings
 from asyncio import CancelledError, InvalidStateError
 from enum import auto
-from typing import Any, Callable, Coroutine, Generator, Generic, List, Optional, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Coroutine,
+    Generator,
+    Generic,
+    List,
+    Optional,
+    TypeVar,
+)
 
 import cocotb
 import cocotb.triggers
@@ -186,26 +195,36 @@ class Task(Generic[ResultType]):
         for callback in self._done_callbacks:
             callback(self)
 
+    @cached_property
+    def complete(self) -> "cocotb.triggers.TaskComplete[ResultType]":
+        return cocotb.triggers.TaskComplete._make(self)
+
     @deprecated(
-        "Using `task` directly is prefered to `task.join()` in all situations where the latter could be used.`"
+        "Using `task` directly is prefered to `task.join()` in all situations where the latter could be used."
     )
-    def join(self) -> "cocotb.triggers._Join[ResultType]":
-        """Wait for the task to complete.
+    def join(self) -> "Task[ResultType]":
+        r"""Block until the Task completes and return the result.
+
+        Equivalent to :any:`.Join`.
 
         Returns:
-            A :class:`~cocotb.triggers.Join` trigger which, if awaited, will block until the given Task completes.
+            Object that can be ``await``\ ed or passed into :class:`First` or :class:`Combine`.
+            The result of which will be the result of the Task.
 
         .. code-block:: python3
+            async def coro_inner():
+                await Timer(1, units="ns")
+                return "Hello world"
 
-            my_task = cocotb.start_soon(my_coro())
-            await my_task.join()
-            # "my_task" is done here
+
+            task = cocotb.start_soon(coro_inner())
+            result = await task.join()
+            assert result == "Hello world"
 
         .. deprecated:: 2.0
-
             Using ``task`` directly is prefered to ``task.join()`` in all situations where the latter could be used.
         """
-        return cocotb.triggers._Join(self)
+        return self
 
     def cancel(self, msg: Optional[str] = None) -> None:
         """Cancel a Task's further execution.
