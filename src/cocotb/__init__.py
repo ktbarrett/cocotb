@@ -24,49 +24,43 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 import ast
-import inspect
 import logging as py_logging
 import os
 import random
 import sys
 import time
 import warnings
-from collections.abc import Coroutine
-from enum import auto
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Union, cast
+from typing import Callable, Dict, List, Union, cast
 
 import cocotb._profiling
+import cocotb.event_loop
 import cocotb.handle
+import cocotb.logging
+import cocotb.regression
+import cocotb.simulator
 import cocotb.task
 import cocotb.triggers
-from cocotb._scheduler import Scheduler
-from cocotb._utils import DocEnum
-from cocotb.logging import default_config
-from cocotb.regression import RegressionManager, RegressionMode
-from cocotb.result import TestSuccess
+import cocotb.types
+from cocotb._decorators import bridge, parametrize, resume, test
+from cocotb._test import create_task, start, start_soon
+from cocotb._version import __version__
 
-from ._version import __version__
-
-# Things we want in the cocotb namespace
-from cocotb._decorators import (  # isort: skip # noqa: F401
-    bridge,
-    resume,
-    test,
-    parametrize,
+__all__ = (
+    "test",
+    "parametrize",
+    "bridge",
+    "resume",
+    "start_soon",
+    "start",
+    "create_task",
+    "__version__",
 )
 
 
 log: py_logging.Logger
 """The default cocotb logger."""
-
-_scheduler_inst: Scheduler
-"""The global scheduler instance."""
-
-regression_manager: RegressionManager
-"""The global regression manager instance."""
 
 argv: List[str]
 """The argument list as seen by the simulator."""
@@ -113,129 +107,15 @@ is_simulation: bool = False
 """``True`` if cocotb was loaded in a simulation."""
 
 
-class SimPhase(DocEnum):
-    """A phase of the time step."""
-
-    NORMAL = (auto(), "In the Beginning Of Time Step or a Value Change phase.")
-    READ_WRITE = (auto(), "In a ReadWrite phase.")
-    READ_ONLY = (auto(), "In a ReadOnly phase.")
-
-
-sim_phase: SimPhase = SimPhase.NORMAL
-"""The current phase of the time step."""
-
-
 def _setup_logging() -> None:
-    default_config()
+    cocotb.logging.default_config()
+
     global log
     log = py_logging.getLogger(__name__)
-    import cocotb.simulator
-    from cocotb.logging import _filter_from_c, _log_from_c
 
-    cocotb.simulator.initialize_logger(_log_from_c, _filter_from_c)
-
-
-def _task_done_callback(task: "cocotb.task.Task[Any]") -> None:
-    # if cancelled, do nothing
-    if task.cancelled():
-        return
-    # if there's a Task awaiting this one, don't fail
-    if task.complete in cocotb._scheduler_inst._trigger2tasks:
-        return
-    # if no failure, do nothing
-    e = task.exception()
-    if e is None:
-        return
-    # there was a failure and no one is watching, fail test
-    elif isinstance(e, (TestSuccess, AssertionError)):
-        task.log.info("Test stopped by this task")
-        cocotb.regression_manager._abort_test(e)
-    else:
-        task.log.error("Exception raised by this task")
-        cocotb.regression_manager._abort_test(e)
-
-
-def start_soon(
-    coro: "Union[cocotb.task.Task[cocotb.task.ResultType], Coroutine[Any, Any, cocotb.task.ResultType]]",
-) -> "cocotb.task.Task[cocotb.task.ResultType]":
-    """
-    Schedule a coroutine to be run concurrently.
-
-    Note that this is not an ``async`` function,
-    and the new task will not execute until the calling task yields control.
-
-    Args:
-        coro: A task or coroutine to be run.
-
-    Returns:
-        The :class:`~cocotb.task.Task` that is scheduled to be run.
-
-    .. versionadded:: 1.6.0
-    """
-    task = create_task(coro)
-    task._add_done_callback(_task_done_callback)
-    cocotb._scheduler_inst._schedule_task(task)
-    return task
-
-
-async def start(
-    coro: "Union[cocotb.task.Task[cocotb.task.ResultType], Coroutine[Any, Any, cocotb.task.ResultType]]",
-) -> "cocotb.task.Task[cocotb.task.ResultType]":
-    """
-    Schedule a coroutine to be run concurrently, then yield control to allow pending tasks to execute.
-
-    The calling task will resume execution before control is returned to the simulator.
-
-    When the calling task resumes, the newly scheduled task may have completed,
-    raised an Exception, or be pending on a :class:`~cocotb.triggers.Trigger`.
-
-    Args:
-        coro: A task or coroutine to be run.
-
-    Returns:
-        The :class:`~cocotb.task.Task` that has been scheduled and allowed to execute.
-
-    .. versionadded:: 1.6.0
-    """
-    task = start_soon(coro)
-    await cocotb.triggers.NullTrigger()
-    return task
-
-
-def create_task(
-    coro: "Union[cocotb.task.Task[cocotb.task.ResultType], Coroutine[Any, Any, cocotb.task.ResultType]]",
-) -> "cocotb.task.Task[cocotb.task.ResultType]":
-    """
-    Construct a coroutine into a :class:`~cocotb.task.Task` without scheduling the task.
-
-    The task can later be scheduled with :func:`cocotb.start` or :func:`cocotb.start_soon`.
-
-    Args:
-        coro: An existing task or a coroutine to be wrapped.
-
-    Returns:
-        Either the provided :class:`~cocotb.task.Task` or a new Task wrapping the coroutine.
-
-    .. versionadded:: 1.6.0
-    """
-    if isinstance(coro, cocotb.task.Task):
-        return coro
-    elif isinstance(coro, Coroutine):
-        return cocotb.task.Task(coro)
-    elif inspect.iscoroutinefunction(coro):
-        raise TypeError(
-            f"Coroutine function {coro} should be called prior to being scheduled."
-        )
-    elif inspect.isasyncgen(coro):
-        raise TypeError(
-            f"{coro.__qualname__} is an async generator, not a coroutine. "
-            "You likely used the yield keyword instead of await."
-        )
-    else:
-        raise TypeError(
-            f"Attempt to add an object of type {type(coro)} to the scheduler, "
-            f"which isn't a coroutine: {coro!r}\n"
-        )
+    cocotb.simulator.initialize_logger(
+        cocotb.logging._log_from_c, cocotb.logging._filter_from_c
+    )
 
 
 _shutdown_callbacks: List[Callable[[], None]] = []
@@ -265,9 +145,7 @@ def _initialise_testbench(argv_: List[str]) -> None:
 
 
 def _initialise_testbench_(argv_: List[str]) -> None:
-    from cocotb import simulator
-
-    simulator.set_sim_event_callback(_sim_event)
+    cocotb.simulator.set_sim_event_callback(_sim_event)
 
     global is_simulation
     is_simulation = True
@@ -289,8 +167,8 @@ def _initialise_testbench_(argv_: List[str]) -> None:
         warnings.simplefilter("default")
 
     global SIM_NAME, SIM_VERSION
-    SIM_NAME = simulator.get_simulator_product().strip()
-    SIM_VERSION = simulator.get_simulator_version().strip()
+    SIM_NAME = cocotb.simulator.get_simulator_product().strip()
+    SIM_VERSION = cocotb.simulator.get_simulator_version().strip()
 
     cocotb.log.info(f"Running on {SIM_NAME} version {SIM_VERSION}")
 
@@ -308,20 +186,17 @@ def _initialise_testbench_(argv_: List[str]) -> None:
     _start_user_coverage()
     _setup_regression_manager()
 
-    # setup global scheduler system
-    global _scheduler_inst
-    _scheduler_inst = Scheduler(test_complete_cb=regression_manager._test_complete)
-
     # start Regression Manager
-    regression_manager.start_regression()
+    cocotb.regression._instance.start_regression()
 
 
 def _sim_event(msg: str) -> None:
     """Function that can be called externally to signal an event."""
     # We simply return here as the simulator will exit
     # so no cleanup is needed
-    if regression_manager is not None:
-        regression_manager._fail_simulation(msg)
+    if cocotb.regression._instance is not None:
+        # TODO
+        cocotb.regression._instance.fail_regression(...)
     else:
         log.error(msg)
         _shutdown_testbench()
@@ -476,8 +351,7 @@ def _setup_root_handle() -> None:
 
 
 def _setup_regression_manager() -> None:
-    global regression_manager
-    regression_manager = RegressionManager()
+    regression_manager = cocotb.regression._instance
 
     # discover tests
     module_str = os.getenv("COCOTB_TEST_MODULES", "")
@@ -501,7 +375,15 @@ def _setup_regression_manager() -> None:
         )
         filters = [f"{s.strip()}$" for s in testcase_str.split(",") if s.strip()]
         regression_manager.add_filters(*filters)
-        regression_manager.set_mode(RegressionMode.TESTCASE)
+        regression_manager.set_mode(cocotb.regression.RegressionMode.TESTCASE)
     elif test_filter_str:
         regression_manager.add_filters(test_filter_str)
-        regression_manager.set_mode(RegressionMode.TESTCASE)
+        regression_manager.set_mode(cocotb.regression.RegressionMode.TESTCASE)
+
+    def regression_complete_callback() -> None:
+        cocotb.simulator.stop_simulator()
+        _shutdown_testbench()
+
+    regression_manager.register_regression_complete_callback(
+        regression_complete_callback
+    )

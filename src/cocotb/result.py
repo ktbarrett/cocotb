@@ -28,3 +28,7 @@
 
 class TestSuccess(BaseException):
     """Exception to be thrown by the user to end a test early, forcing a PASS."""
+
+
+class SimFailure(Exception):
+    """A Test failure due to simulator failure."""
