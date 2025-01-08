@@ -442,7 +442,7 @@ int VhpiCbHdl::cleanup_callback() {
     vhpiStateT cbState =
         (vhpiStateT)vhpi_get(vhpiStateP, get_handle<vhpiHandleT>());
     if (vhpiEnable == cbState) {
-        ret = vhpi_disable_cb(get_handle<vhpiHandleT>());
+        ret = vhpi_remove_cb(get_handle<vhpiHandleT>());
         m_state = GPI_FREE;
     }
 
