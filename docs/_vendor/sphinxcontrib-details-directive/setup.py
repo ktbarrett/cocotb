@@ -44,7 +44,7 @@ setup(
         'Topic :: Documentation :: Sphinx',
         'Topic :: Utilities',
     ],
-    packages=find_packages(),
+    packages=["sphinxcontrib.details.directive"],
     install_requires=[
         'Sphinx>=2.0',
     ],
