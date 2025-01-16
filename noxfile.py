@@ -522,9 +522,11 @@ def release_test_nosim(session: nox.Session) -> None:
 def create_env_for_docs_build(session: nox.Session) -> None:
     # Our fork of domaintools is not installed in requirements.txt due to the
     # way relative paths are handled in that file (gh-pypa/pip#8765).
-    session.run(
-        "pip", "install", "docs/_vendor/domaintools", "-r", "docs/requirements.txt"
-    )
+    vendored_pkgs = [
+        "docs/_vendor/domaintools",
+        "docs/_vendor/sphinxcontrib-details-directive",
+    ]
+    session.run("pip", "install", *vendored_pkgs, "-r", "docs/requirements.txt")
 
 
 @nox.session
