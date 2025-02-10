@@ -936,12 +936,15 @@ class Combine(_AggregateWaitable["Combine"]):
     async def _wait(self) -> "Combine":
         if len(self._triggers) == 0:
             await NullTrigger()
+            return self
         elif len(self._triggers) == 1:
             await self._triggers[0]
+            return self
         else:
             waiters: List[cocotb.task.Task[Any]] = []
             e = _InternalEvent(self)
             triggers = list(self._triggers)
+            result: Outcome[Any] = Value(self)
 
             # start a parallel task for each trigger
             for t in triggers:
@@ -952,17 +955,25 @@ class Combine(_AggregateWaitable["Combine"]):
                         Trigger, Waitable["Combine"], cocotb.task.Task["Combine"]
                     ] = t,
                 ) -> None:
-                    triggers.remove(t)
-                    if not triggers:
+                    if isinstance(ret, Error):
+                        nonlocal result
+                        result = ret
                         e.set()
-                    ret.get()  # re-raise any exception
+                    else:
+                        triggers.remove(t)
+                        if not triggers:
+                            e.set()
 
                 waiters.append(cocotb.start_soon(_wait_callback(t, on_done)))
 
             # wait for the last waiter to complete
             await e
 
-        return self
+            # kill all the other waiters
+            for waiter in waiters:
+                waiter.kill()
+
+            return result.get()
 
 
 class First(_AggregateWaitable[Any]):
@@ -1009,6 +1020,7 @@ class First(_AggregateWaitable[Any]):
         waiters: List[cocotb.task.Task[Any]] = []
         e = _InternalEvent(self)
         completed: List[Outcome[Any]] = []
+
         # start a parallel task for each trigger
         for t in self._triggers:
 
@@ -1022,8 +1034,6 @@ class First(_AggregateWaitable[Any]):
         await e
 
         # kill all the other waiters
-        # TODO: Should this kill the coroutines behind any Join triggers?
-        # Right now it does not.
         for w in waiters:
             w.kill()
 
