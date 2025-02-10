@@ -637,3 +637,22 @@ void gpi_to_simulator() {
     }
     LOG_TRACE("Returning control to simulator");
 }
+
+int gpi_init() {
+    const char *log_level = getenv("GPI_LOG_LEVEL");
+    if (log_level) {
+        static const std::map<std::string, int> logStrToLevel = {
+            {"CRITICAL", GPI_CRITICAL}, {"ERROR", GPI_ERROR},
+            {"WARNING", GPI_WARNING},   {"INFO", GPI_INFO},
+            {"DEBUG", GPI_DEBUG},       {"TRACE", GPI_TRACE}};
+        auto it = logStrToLevel.find(log_level);
+        if (it != logStrToLevel.end()) {
+            gpi_native_logger_set_level(it->second);
+        } else {
+            // LCOV_EXCL_START
+            LOG_ERROR("Invalid log level: %s", log_level);
+            // LCOV_EXCL_STOP
+        }
+    }
+    return 0;
+}

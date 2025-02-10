@@ -794,6 +794,7 @@ static void vpi_main() {
         return;
     }
 #endif
+    gpi_init();
     auto vpi_table = new VpiImpl("VPI");
     vpi_table->main();
 }

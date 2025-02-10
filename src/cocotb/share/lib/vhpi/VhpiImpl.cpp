@@ -1138,6 +1138,7 @@ void VhpiImpl::main() noexcept {
 }
 
 static void vhpi_main() {
+    gpi_init();
     auto vhpi_table = new VhpiImpl("VHPI");
     vhpi_table->main();
 }

@@ -1179,6 +1179,7 @@ static void register_impl() {
 
 extern "C" {
 COCOTBFLI_EXPORT void cocotb_init() {
+    gpi_init();
     auto fli_table = new FliImpl("FLI");
     fli_table->main();
 }

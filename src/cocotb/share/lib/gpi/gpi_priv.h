@@ -304,6 +304,9 @@ GPI_EXPORT void gpi_entry_point();
 GPI_EXPORT void gpi_to_user();
 GPI_EXPORT void gpi_to_simulator();
 
+/** Main entry point to set up GPI */
+GPI_EXPORT int gpi_init();
+
 typedef void (*layer_entry_func)();
 
 /* Use this macro in an implementation layer to define an entry point */
