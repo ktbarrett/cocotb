@@ -8,14 +8,19 @@
 
 #include <cstdarg>  // va_list, va_copy, va_end
 #include <cstdio>   // fprintf, vsnprintf
+#include <map>      // std::map
 #include <vector>   // std::vector
 
 #include "cocotb_utils.h"  // DEFER
 #include "gpi_logging.h"   // all things GPI logging
-
-static PyObject *pLogHandler = nullptr;
+#include "object.h"
+#include "pytypedefs.h"
 
 static int py_gpi_log_level = GPI_NOTSET;
+
+static PyObject *m_log_func = nullptr;
+static std::map<const char *, PyObject *> m_logger_map;
+static PyObject *m_get_logger = nullptr;
 
 static void fallback_handler(const char *name, int level, const char *pathname,
                              const char *funcname, long lineno,
@@ -91,15 +96,20 @@ static void py_gpi_log_handler(void *, const char *name, int level,
     }
     DEFER(Py_DECREF(level_arg));
 
-    PyObject *logger_name_arg = PyUnicode_FromString(name);  // New reference
-    if (logger_name_arg == NULL) {
+    PyObject *logger;
+    const auto lookup = m_logger_map.find(name);
+    if (lookup == m_logger_map.end()) {
+        logger = PyObject_CallFunction(m_get_logger, "s", name);
         // LCOV_EXCL_START
-        PyErr_Print();
-        return fallback_handler(name, level, pathname, funcname, lineno,
-                                log_buff.data());
+        if (!logger) {
+            PyErr_Print();
+            return fallback_handler(name, level, pathname, funcname, lineno,
+                                    log_buff.data());
+        }
         // LCOV_EXCL_STOP
+    } else {
+        logger = lookup->second;
     }
-    DEFER(Py_DECREF(logger_name_arg));
 
     PyObject *filename_arg = PyUnicode_FromString(pathname);  // New reference
     if (filename_arg == NULL) {
@@ -143,8 +153,8 @@ static void py_gpi_log_handler(void *, const char *name, int level,
 
     // Log function args are logger_name, level, filename, lineno, msg, function
     PyObject *handler_ret = PyObject_CallFunctionObjArgs(
-        pLogHandler, logger_name_arg, level_arg, filename_arg, lineno_arg,
-        msg_arg, function_arg, NULL);
+        m_log_func, logger, level_arg, filename_arg, lineno_arg, msg_arg,
+        function_arg, NULL);
     if (handler_ret == NULL) {
         // LCOV_EXCL_START
         PyErr_Print();
@@ -160,15 +170,22 @@ extern "C" void py_gpi_logger_set_level(int level) {
     gpi_native_logger_set_level(level);
 }
 
-extern "C" void py_gpi_logger_initialize(PyObject *handler) {
-    Py_INCREF(handler);
-    pLogHandler = handler;
+extern "C" void py_gpi_logger_initialize(PyObject *log_func,
+                                         PyObject *get_logger) {
+    Py_INCREF(log_func);
+    m_log_func = log_func;
+    m_get_logger = get_logger;
     gpi_set_log_handler(py_gpi_log_handler, nullptr);
 }
 
 extern "C" void py_gpi_logger_finalize() {
     gpi_clear_log_handler();
-    Py_XDECREF(pLogHandler);
+    Py_XDECREF(m_log_func);
+    Py_XDECREF(m_get_logger);
+    for (auto &elem : m_logger_map) {
+        Py_DECREF(elem.second);
+    }
+    m_logger_map.clear();
 }
 
 PyObject *pEventFn = NULL;
