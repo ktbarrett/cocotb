@@ -162,11 +162,14 @@ class Timer(GPITrigger):
             .. versionchanged:: 1.5
                 Previously this argument was misleadingly called `time_ps`.
 
-        units: The unit of the time value.
+        unit: The unit of the time value.
 
             One of ``'step'``, ``'fs'``, ``'ps'``, ``'ns'``, ``'us'``, ``'ms'``, ``'sec'``.
-            When *units* is ``'step'``,
+            When *unit* is ``'step'``,
             the timestep is determined by the simulator (see :make:var:`COCOTB_HDL_TIMEPRECISION`).
+
+            .. versionchanged:: 2.0
+                Renamed from ``units``.
 
         round_mode:
 
@@ -177,24 +180,24 @@ class Timer(GPITrigger):
         ValueError: If a non-positive value is passed for Timer setup.
 
     Usage:
-        >>> await Timer(100, units="ps")
+        >>> await Timer(100, unit="ps")
 
         The time can also be a ``float``:
 
-        >>> await Timer(100e-9, units="sec")
+        >>> await Timer(100e-9, unit="sec")
 
         which is particularly convenient when working with frequencies:
 
         >>> freq = 10e6  # 10 MHz
-        >>> await Timer(1 / freq, units="sec")
+        >>> await Timer(1 / freq, unit="sec")
 
         Other built-in exact numeric types can be used too:
 
         >>> from fractions import Fraction
-        >>> await Timer(Fraction(1, 10), units="ns")
+        >>> await Timer(Fraction(1, 10), unit="ns")
 
         >>> from decimal import Decimal
-        >>> await Timer(Decimal("100e-9"), units="sec")
+        >>> await Timer(Decimal("100e-9"), unit="sec")
 
         These are most useful when using computed durations while
         avoiding floating point inaccuracies.
@@ -204,13 +207,13 @@ class Timer(GPITrigger):
         Warn for 0 as this will cause erratic behavior in some simulators as well.
 
     .. versionchanged:: 1.5
-        Support ``'step'`` as the *units* argument to mean "simulator time step".
+        Support ``'step'`` as the *unit* argument to mean "simulator time step".
 
     .. versionchanged:: 1.6
         Support rounding modes.
 
     .. versionremoved:: 2.0
-        Passing ``None`` as the *units* argument was removed, use ``'step'`` instead.
+        Passing ``None`` as the *unit* argument was removed, use ``'step'`` instead.
 
     .. versionremoved:: 2.0
         The ``time_ps`` parameter was removed, use the ``time`` parameter instead.
@@ -225,7 +228,7 @@ class Timer(GPITrigger):
     def __init__(
         self,
         time: Union[float, Fraction, Decimal],
-        units: str = "step",
+        unit: str = "step",
         *,
         round_mode: Optional[str] = None,
     ) -> None:
@@ -234,7 +237,7 @@ class Timer(GPITrigger):
             raise ValueError("Timer argument time must be positive")
         if round_mode is None:
             round_mode = type(self).round_mode
-        self._sim_steps = get_sim_steps(time, units, round_mode=round_mode)
+        self._sim_steps = get_sim_steps(time, unit, round_mode=round_mode)
         # If we round to 0, we fix it up to 1 step as rounding is imprecise,
         # and Timer(0) is invalid.
         if self._sim_steps == 0:
@@ -253,7 +256,7 @@ class Timer(GPITrigger):
     def __repr__(self) -> str:
         return "<{} of {:1.2f}ps at {}>".format(
             type(self).__qualname__,
-            get_time_from_sim_steps(self._sim_steps, units="ps"),
+            get_time_from_sim_steps(self._sim_steps, unit="ps"),
             _pointer_str(self),
         )
 
@@ -791,7 +794,7 @@ class TaskComplete(Trigger, Generic[T]):
     .. code-block:: python
 
         async def coro_inner():
-            await Timer(1, units="ns")
+            await Timer(1, unit="ns")
             raise ValueError("Oops")
 
 
@@ -844,7 +847,7 @@ def Join(task: "cocotb.task.Task[T]") -> "cocotb.task.Task[T]":
     .. code-block:: python
 
         async def coro_inner():
-            await Timer(1, units="ns")
+            await Timer(1, unit="ns")
             return "Hello world"
 
 
@@ -860,7 +863,7 @@ def Join(task: "cocotb.task.Task[T]") -> "cocotb.task.Task[T]":
         the result of which will be the result of the Task.
 
     .. deprecated:: 2.0
-        Using ``task`` directly is prefered to ``Join(task)`` in all situations where the latter could be used.
+        Using ``task`` directly is preferred to ``Join(task)`` in all situations where the latter could be used.
     """
     return task
 
@@ -985,8 +988,8 @@ class First(_AggregateWaitable[Any]):
         For this reason, the value of ``t_ret is t1`` in the following example
         is implementation-defined, and will vary by simulator::
 
-            t1 = Timer(10, units="ps")
-            t2 = Timer(10, units="ps")
+            t1 = Timer(10, unit="ps")
+            t2 = Timer(10, unit="ps")
             t_ret = await First(t1, t2)
 
     .. note::
@@ -1222,7 +1225,7 @@ async def with_timeout(
         timeout_time:
             Simulation time duration before timeout occurs.
         timeout_unit:
-            Units of timeout_time, accepts any units that :class:`~cocotb.triggers.Timer` does.
+            Unit of timeout_time, accepts any unit that :class:`~cocotb.triggers.Timer` does.
         round_mode:
             String specifying how to handle time values that sit between time steps
             (one of ``'error'``, ``'round'``, ``'ceil'``, ``'floor'``).

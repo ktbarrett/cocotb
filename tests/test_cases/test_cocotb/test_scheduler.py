@@ -328,7 +328,7 @@ async def test_task_repr(_) -> None:
     coro_e = Event("coroutine_inner")
 
     async def coroutine_wait():
-        await Timer(1, units="ns")
+        await Timer(1, unit="ns")
 
     async def coroutine_inner():
         await coro_e.wait()
@@ -377,7 +377,7 @@ async def test_task_repr(_) -> None:
         repr(coro_task),
     )
 
-    await Timer(2, units="ns")
+    await Timer(2, unit="ns")
 
     log.info(repr(coro_task))
     assert re.match(
@@ -387,7 +387,7 @@ async def test_task_repr(_) -> None:
 
     async def coroutine_first():
         task = Task(coroutine_wait())
-        await First(task, Timer(2, units="ns"))
+        await First(task, Timer(2, unit="ns"))
         task.kill()
 
     coro_task = await cocotb.start(coroutine_first())
@@ -431,7 +431,7 @@ async def test_task_repr(_) -> None:
     )
 
     async def coroutine_timer():
-        await Timer(1, units="ns")
+        await Timer(1, unit="ns")
 
     coro_task = await cocotb.start(coroutine_timer())
 
@@ -570,9 +570,9 @@ async def test_await_start_soon(_):
     """Test awaiting start_soon queued coroutine before it starts."""
 
     async def coro():
-        start_time = cocotb.utils.get_sim_time(units="ns")
+        start_time = cocotb.utils.get_sim_time(unit="ns")
         await Timer(1, "ns")
-        assert cocotb.utils.get_sim_time(units="ns") == start_time + 1
+        assert cocotb.utils.get_sim_time(unit="ns") == start_time + 1
 
     coro = cocotb.start_soon(coro())
 
