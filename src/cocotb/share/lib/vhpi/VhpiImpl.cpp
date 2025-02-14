@@ -1050,7 +1050,7 @@ GpiCbHdl *VhpiImpl::register_nexttime_callback(int (*cb_func)(void *),
     return cb_hdl;
 }
 
-void VhpiImpl::sim_end() {
+void VhpiImpl::end_sim() {
     m_sim_finish_cb->remove();
     int err = vhpi_control(vhpiFinish, vhpiDiagTimeLoc);
     // LCOV_EXCL_START
@@ -1093,14 +1093,14 @@ static int startup_callback(void *) {
         vhpi_release_handle(tool);
     }
 
-    gpi_embed_init(tool_argc, tool_argv);
+    gpi_startup(tool_argc, tool_argv);
     delete[] tool_argv;
 
     return 0;
 }
 
 static int shutdown_callback(void *) {
-    gpi_embed_end();
+    gpi_shutdown();
     return 0;
 }
 
@@ -1134,7 +1134,7 @@ void VhpiImpl::main() noexcept {
     m_sim_finish_cb = shutdown_cb;
 
     gpi_register_impl(this);
-    gpi_entry_point();
+    gpi_main();
 }
 
 static void vhpi_main() {

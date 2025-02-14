@@ -33,6 +33,7 @@ _base_warns = [
     # removed once we require later GCC versions.
     "-Wno-missing-field-initializers",
     "-Werror=shadow",
+    "-Wnoexcept",
 ]
 _ccx_warns = _base_warns + ["-Wnon-virtual-dtor", "-Woverloaded-virtual"]
 _extra_cxx_compile_args = [

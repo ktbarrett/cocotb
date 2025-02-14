@@ -29,164 +29,101 @@
 #ifndef COCOTB_GPI_PRIV_H_
 #define COCOTB_GPI_PRIV_H_
 
-#include <exports.h>
+#include <string>
+
+#include "exports.h"
+#include "gpi.h"
+
 #ifdef GPI_EXPORTS
 #define GPI_EXPORT COCOTB_EXPORT
 #else
 #define GPI_EXPORT COCOTB_IMPORT
 #endif
 
-#include <embed.h>
-#include <gpi.h>
-
-#include <string>
-
-class GpiCbHdl;
-class GpiImplInterface;
+class GpiImpl;
 class GpiIterator;
 class GpiCbHdl;
+class GpiObjHdl;
 
-/* Base GPI class others are derived from */
-class GPI_EXPORT GpiHdl {
+/** GPI object handle, maps to a simulation object
+ *
+ * An object is any item in the hierarchy
+ * Provides methods for iterating through children or finding by name
+ * Initial object is returned by call to GpiImplInterface::get_root_handle()
+ * Subsequent operations to get children go through this handle.
+ * GpiObjHdl::get_handle_by_name/get_handle_by_index are really factories
+ * that construct an object derived from GpiSignalObjHdl or GpiObjHdl
+ */
+class GPI_EXPORT GpiObjHdl {
   public:
-    GpiHdl(GpiImplInterface *impl, void *hdl = NULL)
-        : m_impl(impl), m_obj_hdl(hdl) {}
-    virtual ~GpiHdl() = default;
-
-    template <typename T>
-    T get_handle() const {
-        return static_cast<T>(m_obj_hdl);
-    }
-
-  private:
-    GpiHdl() {}  // Disable default constructor
-
-  public:
-    GpiImplInterface *m_impl;                   // VPI/VHPI/FLI routines
-    bool is_this_impl(GpiImplInterface *impl);  // Is the passed interface the
-                                                // one this object uses?
-
-  protected:
-    void *m_obj_hdl;
-};
-
-/* GPI object handle, maps to a simulation object */
-// An object is any item in the hierarchy
-// Provides methods for iterating through children or finding by name
-// Initial object is returned by call to GpiImplInterface::get_root_handle()
-// Subsequent operations to get children go through this handle.
-// GpiObjHdl::get_handle_by_name/get_handle_by_index are really factories
-// that construct an object derived from GpiSignalObjHdl or GpiObjHdl
-class GPI_EXPORT GpiObjHdl : public GpiHdl {
-  public:
-    GpiObjHdl(GpiImplInterface *impl, void *hdl = nullptr,
-              gpi_objtype objtype = GPI_UNKNOWN, bool is_const = false)
-        : GpiHdl(impl, hdl), m_type(objtype), m_const(is_const) {}
-
+    GpiObjHdl(GpiImpl *impl) noexcept : m_impl(impl) {}
+    GpiObjHdl() = delete;
     virtual ~GpiObjHdl() = default;
 
-    // TODO why do these even exist? Just return the string by ref and call
-    // c_str.
-    virtual const char *get_name_str();
-    virtual const char *get_fullname_str();
-    virtual const char *get_type_str();
-    gpi_objtype get_type() { return m_type; };
-    bool get_const() { return m_const; };
-    int get_num_elems() {
-        LOG_DEBUG("%s has %d elements", m_name.c_str(), m_num_elems);
-        return m_num_elems;
-    }
-    int get_range_left() { return m_range_left; }
-    int get_range_right() { return m_range_right; }
-    gpi_range_dir get_range_dir() {
-        LOG_DEBUG("%s has direction %d", m_name.c_str(), m_range_dir);
-        return m_range_dir;
-    }
-    int get_indexable() { return m_indexable; }
+    // Debug related
+    virtual const std::string &repr() = 0;
 
-    const std::string &get_name();
-    const std::string &get_fullname();
+    // Object Properties
+    virtual const std::string &get_type_str();
+    virtual gpi_objtype get_type() = 0;
+    virtual int32_t get_num_elems() = 0;
+    virtual int32_t get_range_left() = 0;
+    virtual int32_t get_range_right() = 0;
+    virtual gpi_range_dir get_range_dir() = 0;
+    virtual bool is_const() = 0;
+    virtual int is_indexable() = 0;
+    virtual const char *get_definition_name() = 0;
+    virtual const char *get_definition_file() = 0;
+    virtual bool is_signal() noexcept { return false; }
 
-    virtual const char *get_definition_name() {
-        return m_definition_name.c_str();
-    };
-    virtual const char *get_definition_file() {
-        return m_definition_file.c_str();
-    };
+    // Path and name
+    virtual const std::string &get_fullname() = 0;
+    virtual const std::string &get_name() = 0;
 
-    bool is_native_impl(GpiImplInterface *impl);
-    virtual int initialise(const std::string &name,
-                           const std::string &full_name);
+    GpiImpl *get_impl() const noexcept { return m_impl; }
 
   protected:
-    int m_num_elems = 0;
-    bool m_indexable = false;
-    int m_range_left = -1;
-    int m_range_right = -1;
-    gpi_range_dir m_range_dir = GPI_RANGE_NO_DIR;
-    std::string m_name = "unknown";
-    std::string m_fullname = "unknown";
-
-    std::string m_definition_name;
-    std::string m_definition_file;
-
-    gpi_objtype m_type;
-    bool m_const;
+    GpiImpl *m_impl;
 };
 
-/* GPI Signal object handle, maps to a simulation object */
-//
-// Identical to an object but adds additional methods for getting/setting the
-// value of the signal (which doesn't apply to non signal items in the hierarchy
+/** GPI Signal object handle, maps to a simulation object.
+ *
+ * Identical to an object but adds additional methods for getting/setting the
+ * value of the signal (which doesn't apply to non signal items in the
+ * hierarchy).
+ */
 class GPI_EXPORT GpiSignalObjHdl : public GpiObjHdl {
   public:
     using GpiObjHdl::GpiObjHdl;
 
-    virtual ~GpiSignalObjHdl() = default;
+    bool is_signal() noexcept override { return true; }
+
     // Provide public access to the implementation (composition vs inheritance)
     virtual const char *get_signal_value_binstr() = 0;
     virtual const char *get_signal_value_str() = 0;
     virtual double get_signal_value_real() = 0;
     virtual long get_signal_value_long() = 0;
 
-    int m_length = 0;
-
-    virtual int set_signal_value(const int32_t value,
-                                 gpi_set_action action) = 0;
-    virtual int set_signal_value(const double value, gpi_set_action action) = 0;
-    virtual int set_signal_value_str(std::string &value,
+    virtual int set_signal_value(int32_t value, gpi_set_action action) = 0;
+    virtual int set_signal_value(double value, gpi_set_action action) = 0;
+    virtual int set_signal_value_str(const std::string &value,
                                      gpi_set_action action) = 0;
-    virtual int set_signal_value_binstr(std::string &value,
+    virtual int set_signal_value_binstr(const std::string &value,
                                         gpi_set_action action) = 0;
-    // virtual GpiCbHdl monitor_value(bool rising_edge) = 0; this was for the
-    // triggers
-    // but the explicit ones are probably better
 
-    virtual GpiCbHdl *register_value_change_callback(
-        gpi_edge edge, int (*gpi_function)(void *), void *gpi_cb_data) = 0;
+    virtual GpiCbHdl *register_value_change_callback(gpi_edge edge,
+                                                     void (*cb_func)(void *),
+                                                     void *cb_data) = 0;
 };
 
-/* GPI Callback handle */
-// To set a callback it needs the signal to do this on,
-// vpiHandle/vhpiHandleT for instance. The
-class GPI_EXPORT GpiCbHdl : public GpiHdl {
+class GPI_EXPORT GpiCbHdl {
   public:
-    GpiCbHdl() = delete;
-    GpiCbHdl(GpiImplInterface *impl) : GpiHdl(impl) {}
+    GpiCbHdl(int (*cb_func)(void *), void *cb_data) noexcept
+        : m_cb_func(cb_func), m_cb_data(cb_data) {}
+    virtual ~GpiCbHdl() = default;
 
-    // TODO Some of these routines don't need to be declared here. Only remove()
-    // and get_cb_info() need to. In fact, declaring these here means we can't
-    // do things like pass arguments to arm().
-
-    /** Set user callback info
-     *
-     * Not on init to prevent having to pass around the arguments everywhere.
-     * Secondary initialization routine. ONLY CALL ONCE!
-     */
-    void set_cb_info(int (*cb_func)(void *), void *cb_data) noexcept {
-        this->m_cb_func = cb_func;
-        this->m_cb_data = cb_data;
-    }
+    // Debug related
+    virtual const std::string &repr() = 0;
 
     /** Get the current user callback function and data. */
     void get_cb_info(int (**cb_func)(void *), void **cb_data) noexcept {
@@ -198,31 +135,24 @@ class GPI_EXPORT GpiCbHdl : public GpiHdl {
         }
     }
 
-    /** Arm the callback after construction.
-     *
-     * Calling virtual functions from constructors does not work as expected.
-     * Secondary initialization routine. ONLY CALL ONCE!
-     */
-    virtual int arm() = 0;
-
     /** Remove the callback before it fires.
      *
      * This function should delete the object.
      */
-    virtual int remove() = 0;
+    virtual void remove() = 0;
 
     /** Run the callback.
      *
      * This function should delete the object if it can't fire again.
      */
-    virtual int run() = 0;
+    virtual void run() = 0;
 
   protected:
     int (*m_cb_func)(void *);  // GPI function to callback
     void *m_cb_data;           // GPI data supplied to "m_cb_func"
 };
 
-class GPI_EXPORT GpiIterator : public GpiHdl {
+class GPI_EXPORT GpiIterator {
   public:
     enum Status {
         NATIVE,          // Fully resolved object was created
@@ -232,35 +162,37 @@ class GPI_EXPORT GpiIterator : public GpiHdl {
         END
     };
 
-    GpiIterator(GpiImplInterface *impl, GpiObjHdl *hdl)
-        : GpiHdl(impl), m_parent(hdl) {}
+    GpiIterator(GpiImpl *impl, GpiObjHdl *parent) noexcept
+        : m_impl(impl), m_parent(parent) {};
     virtual ~GpiIterator() = default;
 
-    virtual Status next_handle(std::string &name, GpiObjHdl **hdl, void **) {
-        name = "";
-        *hdl = NULL;
-        return GpiIterator::END;
-    }
+    // Debug related
+    virtual const std::string &repr() = 0;
 
-    GpiObjHdl *get_parent() { return m_parent; }
+    virtual Status next_handle(std::string &name, GpiObjHdl **hdl, void **) = 0;
+
+    GpiObjHdl *get_parent() const noexcept { return m_parent; }
+    GpiImpl *get_impl() const noexcept { return m_impl; }
 
   protected:
+    GpiImpl *m_impl;
     GpiObjHdl *m_parent;
 };
 
-class GPI_EXPORT GpiImplInterface {
+class GPI_EXPORT GpiImpl {
   public:
-    GpiImplInterface(const std::string &name) : m_name(name) {}
-    const char *get_name_c();
-    const std::string &get_name_s();
-    virtual ~GpiImplInterface() = default;
+    GpiImpl() = delete;
+    virtual ~GpiImpl() = default;
+
+    // Debug related
+    virtual const std::string &repr() = 0;
 
     /* Sim related */
-    virtual void sim_end() = 0;
-    virtual void get_sim_time(uint32_t *high, uint32_t *low) = 0;
-    virtual void get_sim_precision(int32_t *precision) = 0;
-    virtual const char *get_simulator_product() = 0;
-    virtual const char *get_simulator_version() = 0;
+    virtual void end_sim() = 0;
+    virtual uint64_t get_sim_time() = 0;
+    virtual int32_t get_sim_precision() = 0;
+    virtual const std::string &get_simulator_product() = 0;
+    virtual const std::string &get_simulator_version() = 0;
 
     /* Hierarchy related */
     virtual GpiObjHdl *native_check_create(const std::string &name,
@@ -275,33 +207,35 @@ class GPI_EXPORT GpiImplInterface {
 
     /* Callback related, these may (will) return the same handle */
     virtual GpiCbHdl *register_timed_callback(uint64_t time,
-                                              int (*gpi_function)(void *),
+                                              void (*gpi_function)(void *),
                                               void *gpi_cb_data) = 0;
-    virtual GpiCbHdl *register_readonly_callback(int (*gpi_function)(void *),
+    virtual GpiCbHdl *register_readonly_callback(void (*gpi_function)(void *),
                                                  void *gpi_cb_data) = 0;
-    virtual GpiCbHdl *register_nexttime_callback(int (*gpi_function)(void *),
+    virtual GpiCbHdl *register_nexttime_callback(void (*gpi_function)(void *),
                                                  void *gpi_cb_data) = 0;
-    virtual GpiCbHdl *register_readwrite_callback(int (*gpi_function)(void *),
+    virtual GpiCbHdl *register_readwrite_callback(void (*gpi_function)(void *),
                                                   void *gpi_cb_data) = 0;
-
-    /* Method to provide strings from operation types */
-    virtual const char *reason_to_string(int reason) = 0;
-
-  private:
-    std::string m_name;
-
-  protected:
-    std::string m_product;
-    std::string m_version;
 };
 
-/* Called from implementation layers back up the stack */
-GPI_EXPORT int gpi_register_impl(GpiImplInterface *func_tbl);
+/** Register an implementation with the global implementation record. */
+GPI_EXPORT void gpi_register_impl(GpiImpl *impl);
 
-GPI_EXPORT void gpi_embed_init(int argc, char const *const *argv);
-GPI_EXPORT void gpi_embed_end();
-GPI_EXPORT void gpi_entry_point();
+/** Called when the simulation starts. */
+GPI_EXPORT void gpi_start_sim();
+
+/** Called when the simulation ends by request of the simulator. */
+GPI_EXPORT void gpi_stop_sim();
+
+/** The entry point into the GPI. */
+GPI_EXPORT int gpi_initialize(int argc, char const *const *argv);
+
+/** Called right before the simulator is terminated. */
+GPI_EXPORT void gpi_finalize();
+
+/** Delimits where the simulator gives control to the GPI. */
 GPI_EXPORT void gpi_to_user();
+
+/** Delimits where the GPI returns control to the simulator. */
 GPI_EXPORT void gpi_to_simulator();
 
 typedef void (*layer_entry_func)();

@@ -98,7 +98,7 @@ static inline int __check_vhpi_error(const char *file, const char *func,
 
 class VhpiCbHdl : public GpiCbHdl {
   public:
-    VhpiCbHdl(GpiImplInterface *impl);
+    VhpiCbHdl(GpiImpl *impl);
 
     int arm() override;
     int remove() override;
@@ -114,8 +114,7 @@ class VhpiSignalObjHdl;
 
 class VhpiValueCbHdl : public VhpiCbHdl {
   public:
-    VhpiValueCbHdl(GpiImplInterface *impl, VhpiSignalObjHdl *sig,
-                   gpi_edge edge);
+    VhpiValueCbHdl(GpiImpl *impl, VhpiSignalObjHdl *sig, gpi_edge edge);
     int run() override;
 
   private:
@@ -125,22 +124,22 @@ class VhpiValueCbHdl : public VhpiCbHdl {
 
 class VhpiTimedCbHdl : public VhpiCbHdl {
   public:
-    VhpiTimedCbHdl(GpiImplInterface *impl, uint64_t time);
+    VhpiTimedCbHdl(GpiImpl *impl, uint64_t time);
 };
 
 class VhpiReadOnlyCbHdl : public VhpiCbHdl {
   public:
-    VhpiReadOnlyCbHdl(GpiImplInterface *impl);
+    VhpiReadOnlyCbHdl(GpiImpl *impl);
 };
 
 class VhpiNextPhaseCbHdl : public VhpiCbHdl {
   public:
-    VhpiNextPhaseCbHdl(GpiImplInterface *impl);
+    VhpiNextPhaseCbHdl(GpiImpl *impl);
 };
 
 class VhpiStartupCbHdl : public VhpiCbHdl {
   public:
-    VhpiStartupCbHdl(GpiImplInterface *impl);
+    VhpiStartupCbHdl(GpiImpl *impl);
 
     // Too many sims get upset trying to remove startup callbacks so we just
     // don't try. TODO Is this still accurate?
@@ -161,7 +160,7 @@ class VhpiStartupCbHdl : public VhpiCbHdl {
 
 class VhpiShutdownCbHdl : public VhpiCbHdl {
   public:
-    VhpiShutdownCbHdl(GpiImplInterface *impl);
+    VhpiShutdownCbHdl(GpiImpl *impl);
 
     // Too many sims get upset trying to remove startup callbacks so we just
     // don't try. TODO Is this still accurate?
@@ -182,13 +181,12 @@ class VhpiShutdownCbHdl : public VhpiCbHdl {
 
 class VhpiReadWriteCbHdl : public VhpiCbHdl {
   public:
-    VhpiReadWriteCbHdl(GpiImplInterface *impl);
+    VhpiReadWriteCbHdl(GpiImpl *impl);
 };
 
 class VhpiArrayObjHdl : public GpiObjHdl {
   public:
-    VhpiArrayObjHdl(GpiImplInterface *impl, vhpiHandleT hdl,
-                    gpi_objtype objtype)
+    VhpiArrayObjHdl(GpiImpl *impl, vhpiHandleT hdl, gpi_objtype objtype)
         : GpiObjHdl(impl, hdl, objtype) {}
     ~VhpiArrayObjHdl() override;
 
@@ -198,7 +196,7 @@ class VhpiArrayObjHdl : public GpiObjHdl {
 
 class VhpiObjHdl : public GpiObjHdl {
   public:
-    VhpiObjHdl(GpiImplInterface *impl, vhpiHandleT hdl, gpi_objtype objtype)
+    VhpiObjHdl(GpiImpl *impl, vhpiHandleT hdl, gpi_objtype objtype)
         : GpiObjHdl(impl, hdl, objtype) {}
     ~VhpiObjHdl() override;
 
@@ -208,8 +206,8 @@ class VhpiObjHdl : public GpiObjHdl {
 
 class VhpiSignalObjHdl : public GpiSignalObjHdl {
   public:
-    VhpiSignalObjHdl(GpiImplInterface *impl, vhpiHandleT hdl,
-                     gpi_objtype objtype, bool is_const)
+    VhpiSignalObjHdl(GpiImpl *impl, vhpiHandleT hdl, gpi_objtype objtype,
+                     bool is_const)
         : GpiSignalObjHdl(impl, hdl, objtype, is_const) {}
     ~VhpiSignalObjHdl() override;
 
@@ -241,8 +239,8 @@ class VhpiSignalObjHdl : public GpiSignalObjHdl {
 
 class VhpiLogicSignalObjHdl : public VhpiSignalObjHdl {
   public:
-    VhpiLogicSignalObjHdl(GpiImplInterface *impl, vhpiHandleT hdl,
-                          gpi_objtype objtype, bool is_const)
+    VhpiLogicSignalObjHdl(GpiImpl *impl, vhpiHandleT hdl, gpi_objtype objtype,
+                          bool is_const)
         : VhpiSignalObjHdl(impl, hdl, objtype, is_const) {}
 
     using GpiSignalObjHdl::set_signal_value;
@@ -256,7 +254,7 @@ class VhpiLogicSignalObjHdl : public VhpiSignalObjHdl {
 
 class VhpiIterator : public GpiIterator {
   public:
-    VhpiIterator(GpiImplInterface *impl, GpiObjHdl *hdl);
+    VhpiIterator(GpiImpl *impl, GpiObjHdl *hdl);
 
     ~VhpiIterator() override;
 
@@ -272,12 +270,12 @@ class VhpiIterator : public GpiIterator {
     std::vector<vhpiOneToManyT>::iterator one2many;
 };
 
-class VhpiImpl : public GpiImplInterface {
+class VhpiImpl : public GpiImpl {
   public:
-    VhpiImpl(const std::string &name) : GpiImplInterface(name) {}
+    VhpiImpl(const std::string &name) : GpiImpl(name) {}
 
     /* Sim related */
-    void sim_end() override;
+    void end_sim() override;
     void get_sim_time(uint32_t *high, uint32_t *low) override;
     void get_sim_precision(int32_t *precision) override;
     const char *get_simulator_product() override;

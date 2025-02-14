@@ -36,6 +36,7 @@
 #include "_vendor/vpi/sv_vpi_user.h"
 #include "exports.h"
 #include "gpi.h"
+#include "gpi_logging.h"
 
 #ifdef COCOTBVPI_EXPORTS
 #define COCOTBVPI_EXPORT COCOTB_EXPORT
@@ -89,7 +90,7 @@ static inline int __check_vpi_error(const char *file, const char *func,
 
 class VpiCbHdl : public GpiCbHdl {
   public:
-    VpiCbHdl(GpiImplInterface *impl);
+    VpiCbHdl(GpiImpl *impl);
 
     int arm() override;
     int remove() override;
@@ -105,7 +106,7 @@ class VpiSignalObjHdl;
 
 class VpiValueCbHdl : public VpiCbHdl {
   public:
-    VpiValueCbHdl(GpiImplInterface *impl, VpiSignalObjHdl *sig, gpi_edge edge);
+    VpiValueCbHdl(GpiImpl *impl, VpiSignalObjHdl *sig, gpi_edge edge);
     int run() override;
 
   private:
@@ -116,32 +117,33 @@ class VpiValueCbHdl : public VpiCbHdl {
 
 class VpiTimedCbHdl : public VpiCbHdl {
   public:
-    VpiTimedCbHdl(GpiImplInterface *impl, uint64_t time);
+    VpiTimedCbHdl(GpiImpl *impl, uint64_t time);
 };
 
 class VpiReadOnlyCbHdl : public VpiCbHdl {
   public:
-    VpiReadOnlyCbHdl(GpiImplInterface *impl);
+    VpiReadOnlyCbHdl(GpiImpl *impl);
 };
 
 class VpiNextPhaseCbHdl : public VpiCbHdl {
   public:
-    VpiNextPhaseCbHdl(GpiImplInterface *impl);
+    VpiNextPhaseCbHdl(GpiImpl *impl);
 };
 
 class VpiReadWriteCbHdl : public VpiCbHdl {
   public:
-    VpiReadWriteCbHdl(GpiImplInterface *impl);
+    VpiReadWriteCbHdl(GpiImpl *impl);
 };
 
 class VpiStartupCbHdl : public VpiCbHdl {
   public:
-    VpiStartupCbHdl(GpiImplInterface *impl);
+    VpiStartupCbHdl(GpiImpl *impl);
 
     // Too many sims get upset trying to remove startup callbacks so we just
     // don't try. TODO Is this still accurate?
 
     int run() override {
+        LOG_DEBUG("Ran startup callback.");
         if (!m_removed) {
             m_cb_func(m_cb_data);
         }
@@ -150,6 +152,7 @@ class VpiStartupCbHdl : public VpiCbHdl {
     }
 
     int remove() override {
+        LOG_DEBUG("Removed startup callback.");
         m_removed = true;
         return 0;
     }
@@ -157,12 +160,13 @@ class VpiStartupCbHdl : public VpiCbHdl {
 
 class VpiShutdownCbHdl : public VpiCbHdl {
   public:
-    VpiShutdownCbHdl(GpiImplInterface *impl);
+    VpiShutdownCbHdl(GpiImpl *impl);
 
     // Too many sims get upset trying to remove startup callbacks so we just
     // don't try. TODO Is this still accurate?
 
     int run() override {
+        LOG_DEBUG("Ran shutdown callback.");
         if (!m_removed) {
             m_cb_func(m_cb_data);
         }
@@ -171,6 +175,7 @@ class VpiShutdownCbHdl : public VpiCbHdl {
     }
 
     int remove() override {
+        LOG_DEBUG("Removed shutdown callback.");
         m_removed = true;
         return 0;
     }
@@ -178,7 +183,7 @@ class VpiShutdownCbHdl : public VpiCbHdl {
 
 class VpiArrayObjHdl : public GpiObjHdl {
   public:
-    VpiArrayObjHdl(GpiImplInterface *impl, vpiHandle hdl, gpi_objtype objtype)
+    VpiArrayObjHdl(GpiImpl *impl, vpiHandle hdl, gpi_objtype objtype)
         : GpiObjHdl(impl, hdl, objtype) {}
 
     int initialise(const std::string &name,
@@ -187,7 +192,7 @@ class VpiArrayObjHdl : public GpiObjHdl {
 
 class VpiObjHdl : public GpiObjHdl {
   public:
-    VpiObjHdl(GpiImplInterface *impl, vpiHandle hdl, gpi_objtype objtype)
+    VpiObjHdl(GpiImpl *impl, vpiHandle hdl, gpi_objtype objtype)
         : GpiObjHdl(impl, hdl, objtype) {}
 
     const char *get_definition_name() override;
@@ -196,7 +201,7 @@ class VpiObjHdl : public GpiObjHdl {
 
 class VpiSignalObjHdl : public GpiSignalObjHdl {
   public:
-    VpiSignalObjHdl(GpiImplInterface *impl, vpiHandle hdl, gpi_objtype objtype,
+    VpiSignalObjHdl(GpiImpl *impl, vpiHandle hdl, gpi_objtype objtype,
                     bool is_const)
         : GpiSignalObjHdl(impl, hdl, objtype, is_const) {}
 
@@ -225,7 +230,7 @@ class VpiSignalObjHdl : public GpiSignalObjHdl {
 
 class VpiIterator : public GpiIterator {
   public:
-    VpiIterator(GpiImplInterface *impl, GpiObjHdl *hdl);
+    VpiIterator(GpiImpl *impl, GpiObjHdl *hdl);
 
     ~VpiIterator() override;
 
@@ -243,7 +248,7 @@ class VpiIterator : public GpiIterator {
 // Base class for simple iterator that only iterates over a single type
 class VpiSingleIterator : public GpiIterator {
   public:
-    VpiSingleIterator(GpiImplInterface *impl, GpiObjHdl *hdl, int32_t vpitype)
+    VpiSingleIterator(GpiImpl *impl, GpiObjHdl *hdl, int32_t vpitype)
         : GpiIterator(impl, hdl)
 
     {
@@ -266,7 +271,7 @@ class VpiSingleIterator : public GpiIterator {
 
 class VpiPackageIterator : public GpiIterator {
   public:
-    VpiPackageIterator(GpiImplInterface *impl)
+    VpiPackageIterator(GpiImpl *impl)
         : GpiIterator(impl, nullptr)
 
     {
@@ -288,16 +293,16 @@ class VpiPackageIterator : public GpiIterator {
     vpiHandle m_iterator = nullptr;
 };
 
-class VpiImpl : public GpiImplInterface {
+class VpiImpl : public GpiImpl {
   public:
-    VpiImpl(const std::string &name) : GpiImplInterface(name) {}
+    VpiImpl(const std::string &name) : GpiImpl(name) {}
 
     /* Sim related */
-    void sim_end(void) override;
-    void get_sim_time(uint32_t *high, uint32_t *low) override;
-    void get_sim_precision(int32_t *precision) override;
-    const char *get_simulator_product() override;
-    const char *get_simulator_version() override;
+    void end_sim(void) override;
+    uint64_t get_sim_time() override;
+    int32_t get_sim_precision() override;
+    const std::string &get_simulator_product() override;
+    const std::string &get_simulator_version() override;
 
     /* Hierarchy related */
     GpiObjHdl *get_root_handle(const char *name) override;

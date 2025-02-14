@@ -47,7 +47,7 @@ void handle_vhpi_callback(const vhpiCbDataT *cb_data) {
     // LCOV_EXCL_START
     if (!cb_hdl) {
         LOG_CRITICAL("VHPI: Callback data corrupted: ABORTING");
-        gpi_embed_end();
+        gpi_stop_sim();
         return;
     }
     // LCOV_EXCL_STOP
@@ -439,7 +439,7 @@ int VhpiLogicSignalObjHdl::initialise(const std::string &name,
     return GpiObjHdl::initialise(name, fq_name);
 }
 
-VhpiCbHdl::VhpiCbHdl(GpiImplInterface *impl) : GpiCbHdl(impl) {
+VhpiCbHdl::VhpiCbHdl(GpiImpl *impl) : GpiCbHdl(impl) {
     cb_data.reason = 0;
     cb_data.cb_rtn = handle_vhpi_callback;
     cb_data.obj = NULL;
@@ -884,7 +884,7 @@ GpiCbHdl *VhpiSignalObjHdl::register_value_change_callback(
     return cb_hdl;
 }
 
-VhpiValueCbHdl::VhpiValueCbHdl(GpiImplInterface *impl, VhpiSignalObjHdl *sig,
+VhpiValueCbHdl::VhpiValueCbHdl(GpiImpl *impl, VhpiSignalObjHdl *sig,
                                gpi_edge edge)
     : VhpiCbHdl(impl), m_signal(sig), m_edge(edge) {
     cb_data.reason = vhpiCbValueChange;
@@ -939,16 +939,15 @@ int VhpiValueCbHdl::run() {
     return 0;
 }
 
-VhpiStartupCbHdl::VhpiStartupCbHdl(GpiImplInterface *impl) : VhpiCbHdl(impl) {
+VhpiStartupCbHdl::VhpiStartupCbHdl(GpiImpl *impl) : VhpiCbHdl(impl) {
     cb_data.reason = vhpiCbStartOfSimulation;
 }
 
-VhpiShutdownCbHdl::VhpiShutdownCbHdl(GpiImplInterface *impl) : VhpiCbHdl(impl) {
+VhpiShutdownCbHdl::VhpiShutdownCbHdl(GpiImpl *impl) : VhpiCbHdl(impl) {
     cb_data.reason = vhpiCbEndOfSimulation;
 }
 
-VhpiTimedCbHdl::VhpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
-    : VhpiCbHdl(impl) {
+VhpiTimedCbHdl::VhpiTimedCbHdl(GpiImpl *impl, uint64_t time) : VhpiCbHdl(impl) {
     vhpi_time.high = (uint32_t)(time >> 32);
     vhpi_time.low = (uint32_t)(time);
 
@@ -956,19 +955,17 @@ VhpiTimedCbHdl::VhpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
     cb_data.time = &vhpi_time;
 }
 
-VhpiReadWriteCbHdl::VhpiReadWriteCbHdl(GpiImplInterface *impl)
-    : VhpiCbHdl(impl) {
+VhpiReadWriteCbHdl::VhpiReadWriteCbHdl(GpiImpl *impl) : VhpiCbHdl(impl) {
     cb_data.reason = vhpiCbRepLastKnownDeltaCycle;
     cb_data.time = &vhpi_time;
 }
 
-VhpiReadOnlyCbHdl::VhpiReadOnlyCbHdl(GpiImplInterface *impl) : VhpiCbHdl(impl) {
+VhpiReadOnlyCbHdl::VhpiReadOnlyCbHdl(GpiImpl *impl) : VhpiCbHdl(impl) {
     cb_data.reason = vhpiCbRepEndOfTimeStep;
     cb_data.time = &vhpi_time;
 }
 
-VhpiNextPhaseCbHdl::VhpiNextPhaseCbHdl(GpiImplInterface *impl)
-    : VhpiCbHdl(impl) {
+VhpiNextPhaseCbHdl::VhpiNextPhaseCbHdl(GpiImpl *impl) : VhpiCbHdl(impl) {
     cb_data.reason = vhpiCbRepNextTimeStep;
     cb_data.time = &vhpi_time;
 }
@@ -1028,7 +1025,7 @@ decltype(VhpiIterator::iterate_over) VhpiIterator::iterate_over = [] {
     };
 }();
 
-VhpiIterator::VhpiIterator(GpiImplInterface *impl, GpiObjHdl *hdl)
+VhpiIterator::VhpiIterator(GpiImpl *impl, GpiObjHdl *hdl)
     : GpiIterator(impl, hdl), m_iterator(NULL), m_iter_obj(NULL) {
     vhpiHandleT iterator;
     vhpiHandleT vhpi_hdl = m_parent->get_handle<vhpiHandleT>();

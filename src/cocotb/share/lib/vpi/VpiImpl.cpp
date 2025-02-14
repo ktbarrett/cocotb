@@ -54,7 +54,7 @@ const char *VpiImpl::reason_to_string(int reason) {
 
 #undef CASE_STR
 
-void VpiImpl::get_sim_time(uint32_t *high, uint32_t *low) {
+uint64_t VpiImpl::get_sim_time() {
     s_vpi_time vpi_time_s;
     vpi_time_s.type = vpiSimTime;  // vpiSimTime;
     vpi_get_time(NULL, &vpi_time_s);
@@ -699,7 +699,7 @@ GpiCbHdl *VpiImpl::register_nexttime_callback(int (*cb_func)(void *),
 
 // If the Python world wants things to shut down then unregister
 // the callback for end of sim
-void VpiImpl::sim_end() {
+void VpiImpl::end_sim() {
     m_sim_finish_cb->remove();
 #ifdef ICARUS
     // Must skip checking return value on Icarus because their version of
@@ -740,13 +740,13 @@ static int startup_callback(void *) {
     }
     // LCOV_EXCL_STOP
 
-    gpi_embed_init(info.argc, info.argv);
+    gpi_startup(info.argc, info.argv);
 
     return 0;
 }
 
 static int shutdown_callback(void *) {
-    gpi_embed_end();
+    gpi_stop_sim();
     return 0;
 }
 
@@ -780,7 +780,7 @@ void VpiImpl::main() noexcept {
     m_sim_finish_cb = shutdown_cb;
 
     gpi_register_impl(this);
-    gpi_entry_point();
+    gpi_main();
 }
 
 static void vpi_main() {

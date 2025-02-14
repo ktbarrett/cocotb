@@ -107,7 +107,7 @@ decltype(VpiIterator::iterate_over) VpiIterator::iterate_over = [] {
     };
 }();
 
-VpiIterator::VpiIterator(GpiImplInterface *impl, GpiObjHdl *hdl)
+VpiIterator::VpiIterator(GpiImpl *impl, GpiObjHdl *hdl)
     : GpiIterator(impl, hdl), m_iterator(NULL) {
     vpiHandle iterator;
     vpiHandle vpi_hdl = m_parent->get_handle<vpiHandle>();

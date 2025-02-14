@@ -54,7 +54,7 @@ class FliCbHdl : public GpiCbHdl {
 // We use a subclass to track the process state related to the callback
 class FliProcessCbHdl : public FliCbHdl {
   public:
-    FliProcessCbHdl(GpiImplInterface *impl) : FliCbHdl(impl) {}
+    FliProcessCbHdl(GpiImpl *impl) : FliCbHdl(impl) {}
 
     void set_mti_proc(mtiProcessIdT mti_proc) noexcept {
         m_proc_hdl = mti_proc;
@@ -155,7 +155,7 @@ class FliReadOnlyCbHdl : public FliSimPhaseCbHdl {
 
 class FliStartupCbHdl : public FliCbHdl {
   public:
-    FliStartupCbHdl(GpiImplInterface *impl) : FliCbHdl(impl) {}
+    FliStartupCbHdl(GpiImpl *impl) : FliCbHdl(impl) {}
 
     int arm() override;
     int run() override;
@@ -164,7 +164,7 @@ class FliStartupCbHdl : public FliCbHdl {
 
 class FliShutdownCbHdl : public FliCbHdl {
   public:
-    FliShutdownCbHdl(GpiImplInterface *impl) : FliCbHdl(impl) {}
+    FliShutdownCbHdl(GpiImpl *impl) : FliCbHdl(impl) {}
 
     int arm() override;
     int run() override;
@@ -208,8 +208,8 @@ class FliObj {
 
 class FliObjHdl : public GpiObjHdl, public FliObj {
   public:
-    FliObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
-              int acc_type, int acc_full_type, bool is_const = false)
+    FliObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype, int acc_type,
+              int acc_full_type, bool is_const = false)
         : GpiObjHdl(impl, hdl, objtype, is_const),
           FliObj(acc_type, acc_full_type) {}
 
@@ -219,7 +219,7 @@ class FliObjHdl : public GpiObjHdl, public FliObj {
 
 class FliSignalObjHdl : public GpiSignalObjHdl, public FliObj {
   public:
-    FliSignalObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
+    FliSignalObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype,
                     bool is_const, int acc_type, int acc_full_type, bool is_var)
         : GpiSignalObjHdl(impl, hdl, objtype, is_const),
           FliObj(acc_type, acc_full_type),
@@ -239,8 +239,8 @@ class FliSignalObjHdl : public GpiSignalObjHdl, public FliObj {
 
 class FliValueObjHdl : public FliSignalObjHdl {
   public:
-    FliValueObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
-                   bool is_const, int acc_type, int acc_full_type, bool is_var,
+    FliValueObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype, bool is_const,
+                   int acc_type, int acc_full_type, bool is_var,
                    mtiTypeIdT valType, mtiTypeKindT typeKind)
         : FliSignalObjHdl(impl, hdl, objtype, is_const, acc_type, acc_full_type,
                           is_var),
@@ -281,8 +281,8 @@ class FliValueObjHdl : public FliSignalObjHdl {
 
 class FliEnumObjHdl : public FliValueObjHdl {
   public:
-    FliEnumObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
-                  bool is_const, int acc_type, int acc_full_type, bool is_var,
+    FliEnumObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype, bool is_const,
+                  int acc_type, int acc_full_type, bool is_var,
                   mtiTypeIdT valType, mtiTypeKindT typeKind)
         : FliValueObjHdl(impl, hdl, objtype, is_const, acc_type, acc_full_type,
                          is_var, valType, typeKind) {}
@@ -303,8 +303,8 @@ class FliEnumObjHdl : public FliValueObjHdl {
 
 class FliLogicObjHdl : public FliValueObjHdl {
   public:
-    FliLogicObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
-                   bool is_const, int acc_type, int acc_full_type, bool is_var,
+    FliLogicObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype, bool is_const,
+                   int acc_type, int acc_full_type, bool is_var,
                    mtiTypeIdT valType, mtiTypeKindT typeKind)
         : FliValueObjHdl(impl, hdl, objtype, is_const, acc_type, acc_full_type,
                          is_var, valType, typeKind) {}
@@ -332,8 +332,8 @@ class FliLogicObjHdl : public FliValueObjHdl {
 
 class FliIntObjHdl : public FliValueObjHdl {
   public:
-    FliIntObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
-                 bool is_const, int acc_type, int acc_full_type, bool is_var,
+    FliIntObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype, bool is_const,
+                 int acc_type, int acc_full_type, bool is_var,
                  mtiTypeIdT valType, mtiTypeKindT typeKind)
         : FliValueObjHdl(impl, hdl, objtype, is_const, acc_type, acc_full_type,
                          is_var, valType, typeKind) {}
@@ -350,8 +350,8 @@ class FliIntObjHdl : public FliValueObjHdl {
 
 class FliRealObjHdl : public FliValueObjHdl {
   public:
-    FliRealObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
-                  bool is_const, int acc_type, int acc_full_type, bool is_var,
+    FliRealObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype, bool is_const,
+                  int acc_type, int acc_full_type, bool is_var,
                   mtiTypeIdT valType, mtiTypeKindT typeKind)
         : FliValueObjHdl(impl, hdl, objtype, is_const, acc_type, acc_full_type,
                          is_var, valType, typeKind) {}
@@ -374,7 +374,7 @@ class FliRealObjHdl : public FliValueObjHdl {
 
 class FliStringObjHdl : public FliValueObjHdl {
   public:
-    FliStringObjHdl(GpiImplInterface *impl, void *hdl, gpi_objtype objtype,
+    FliStringObjHdl(GpiImpl *impl, void *hdl, gpi_objtype objtype,
                     bool is_const, int acc_type, int acc_full_type, bool is_var,
                     mtiTypeIdT valType, mtiTypeKindT typeKind)
         : FliValueObjHdl(impl, hdl, objtype, is_const, acc_type, acc_full_type,
@@ -407,7 +407,7 @@ class FliIterator : public GpiIterator {
         OTM_VARIABLE_SUB_ELEMENTS
     };
 
-    FliIterator(GpiImplInterface *impl, GpiObjHdl *hdl);
+    FliIterator(GpiImpl *impl, GpiObjHdl *hdl);
 
     Status next_handle(std::string &name, GpiObjHdl **hdl,
                        void **raw_hdl) override;
@@ -428,10 +428,10 @@ class FliIterator : public GpiIterator {
     std::vector<void *>::iterator m_iterator;
 };
 
-class FliImpl : public GpiImplInterface {
+class FliImpl : public GpiImpl {
   public:
     FliImpl(const std::string &name)
-        : GpiImplInterface(name),
+        : GpiImpl(name),
           m_timer_cache(this),
           m_value_change_cache(this),
           m_read_write_cache(this),
@@ -439,7 +439,7 @@ class FliImpl : public GpiImplInterface {
           m_next_phase_cache(this) {}
 
     /* Sim related */
-    void sim_end() override;
+    void end_sim() override;
     void get_sim_time(uint32_t *high, uint32_t *low) override;
     void get_sim_precision(int32_t *precision) override;
     const char *get_simulator_product() override;

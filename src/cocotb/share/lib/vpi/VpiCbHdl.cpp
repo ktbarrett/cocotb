@@ -43,7 +43,7 @@ static int32_t handle_vpi_callback_(GpiCbHdl *cb_hdl) {
     // LCOV_EXCL_START
     if (!cb_hdl) {
         LOG_CRITICAL("VPI: Callback data corrupted: ABORTING");
-        gpi_embed_end();
+        gpi_shutdown();
         return -1;
     }
     // LCOV_EXCL_STOP
@@ -60,13 +60,14 @@ int32_t handle_vpi_callback(p_cb_data cb_data) {
     VpiCbHdl *cb_hdl = (VpiCbHdl *)cb_data->user_data;
     return handle_vpi_callback_(cb_hdl);
 #else
-    // must push things into a queue because Icaurus (gh-4067), Xcelium
+    // must push things into a queue because Icarus (gh-4067), Xcelium
     // (gh-4013), and Questa (gh-4105) react to value changes on signals that
     // are set with vpiNoDelay immediately, and not after the current callback
     // has ended, causing re-entrancy.
     static bool reacting = false;
     VpiCbHdl *cb_hdl = (VpiCbHdl *)cb_data->user_data;
     if (reacting) {
+        LOG_DEBUG("Got VPI callback while already reacting, queueing...");
         cb_queue.push_back(cb_hdl);
         return 0;
     }
@@ -81,7 +82,7 @@ int32_t handle_vpi_callback(p_cb_data cb_data) {
 #endif
 }
 
-VpiCbHdl::VpiCbHdl(GpiImplInterface *impl) : GpiCbHdl(impl) {
+VpiCbHdl::VpiCbHdl(GpiImpl *impl) : GpiCbHdl(impl) {
     vpi_time.high = 0;
     vpi_time.low = 0;
     vpi_time.type = vpiSimTime;
@@ -173,7 +174,7 @@ int VpiCbHdl::run() {
     return 0;
 }
 
-VpiValueCbHdl::VpiValueCbHdl(GpiImplInterface *impl, VpiSignalObjHdl *signal,
+VpiValueCbHdl::VpiValueCbHdl(GpiImpl *impl, VpiSignalObjHdl *signal,
                              gpi_edge edge)
     : VpiCbHdl(impl), m_signal(signal), m_edge(edge) {
     vpi_time.type = vpiSuppressTime;
@@ -231,7 +232,7 @@ int VpiValueCbHdl::run() {
     return 0;
 }
 
-VpiStartupCbHdl::VpiStartupCbHdl(GpiImplInterface *impl) : VpiCbHdl(impl) {
+VpiStartupCbHdl::VpiStartupCbHdl(GpiImpl *impl) : VpiCbHdl(impl) {
 #ifndef IUS
     cb_data.reason = cbStartOfSimulation;
 #else
@@ -242,12 +243,11 @@ VpiStartupCbHdl::VpiStartupCbHdl(GpiImplInterface *impl) : VpiCbHdl(impl) {
 #endif
 }
 
-VpiShutdownCbHdl::VpiShutdownCbHdl(GpiImplInterface *impl) : VpiCbHdl(impl) {
+VpiShutdownCbHdl::VpiShutdownCbHdl(GpiImpl *impl) : VpiCbHdl(impl) {
     cb_data.reason = cbEndOfSimulation;
 }
 
-VpiTimedCbHdl::VpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
-    : VpiCbHdl(impl) {
+VpiTimedCbHdl::VpiTimedCbHdl(GpiImpl *impl, uint64_t time) : VpiCbHdl(impl) {
     vpi_time.high = (uint32_t)(time >> 32);
     vpi_time.low = (uint32_t)(time);
     vpi_time.type = vpiSimTime;
@@ -255,14 +255,14 @@ VpiTimedCbHdl::VpiTimedCbHdl(GpiImplInterface *impl, uint64_t time)
     cb_data.reason = cbAfterDelay;
 }
 
-VpiReadWriteCbHdl::VpiReadWriteCbHdl(GpiImplInterface *impl) : VpiCbHdl(impl) {
+VpiReadWriteCbHdl::VpiReadWriteCbHdl(GpiImpl *impl) : VpiCbHdl(impl) {
     cb_data.reason = cbReadWriteSynch;
 }
 
-VpiReadOnlyCbHdl::VpiReadOnlyCbHdl(GpiImplInterface *impl) : VpiCbHdl(impl) {
+VpiReadOnlyCbHdl::VpiReadOnlyCbHdl(GpiImpl *impl) : VpiCbHdl(impl) {
     cb_data.reason = cbReadOnlySynch;
 }
 
-VpiNextPhaseCbHdl::VpiNextPhaseCbHdl(GpiImplInterface *impl) : VpiCbHdl(impl) {
+VpiNextPhaseCbHdl::VpiNextPhaseCbHdl(GpiImpl *impl) : VpiCbHdl(impl) {
     cb_data.reason = cbNextSimTime;
 }

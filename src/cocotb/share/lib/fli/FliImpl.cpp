@@ -38,7 +38,7 @@
 #include "_vendor/fli/mti.h"
 #include "_vendor/tcl/tcl.h"
 
-void FliImpl::sim_end() {
+void FliImpl::end_sim() {
     m_sim_finish_cb->remove();
     if (mti_NowUpper() == 0 && mti_Now() == 0 && mti_Delta() == 0) {
         mti_Quit();
@@ -702,7 +702,7 @@ decltype(FliIterator::iterate_over) FliIterator::iterate_over = [] {
     };
 }();
 
-FliIterator::FliIterator(GpiImplInterface *impl, GpiObjHdl *hdl)
+FliIterator::FliIterator(GpiImpl *impl, GpiObjHdl *hdl)
     : GpiIterator(impl, hdl),
       m_vars(),
       m_sigs(),
@@ -1013,7 +1013,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType) {
                     m_sigs.push_back(ids[i]);
                 }
                 mti_VsimFree(ids);
-            } else if (m_parent->get_indexable()) {
+            } else if (m_parent->is_indexable()) {
                 FliValueObjHdl *fli_obj =
                     reinterpret_cast<FliValueObjHdl *>(m_parent);
 
@@ -1046,7 +1046,7 @@ void FliIterator::populate_handle_list(FliIterator::OneToMany childType) {
                 }
 
                 mti_VsimFree(ids);
-            } else if (m_parent->get_indexable()) {
+            } else if (m_parent->is_indexable()) {
                 FliValueObjHdl *fli_obj =
                     reinterpret_cast<FliValueObjHdl *>(m_parent);
 
@@ -1131,13 +1131,13 @@ static int startup_callback(void *) {
     int argc = static_cast<int>(argv_storage.size());
     const char **argv = argv_cstr.data();
 
-    gpi_embed_init(argc, argv);
+    gpi_start_sim(argc, argv);
 
     return 0;
 }
 
 static int shutdown_callback(void *) {
-    gpi_embed_end();
+    gpi_stop_sim();
     return 0;
 }
 
@@ -1169,7 +1169,7 @@ void FliImpl::main() noexcept {
     m_sim_finish_cb = shutdown_cb;
 
     gpi_register_impl(this);
-    gpi_entry_point();
+    gpi_initialize();
 }
 
 static void register_impl() {

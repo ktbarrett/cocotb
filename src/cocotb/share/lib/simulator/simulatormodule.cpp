@@ -35,14 +35,13 @@
  */
 
 #include <Python.h>
-#include <cocotb_utils.h>    // to_python to_simulator
-#include <py_gpi_logging.h>  // py_gpi_logger_set_level
 
 #include <cerrno>
-#include <limits>
-#include <type_traits>
+#include <cstdint>
 
+#include "cocotb_utils.h"  // to_python to_simulator
 #include "gpi.h"
+#include "py_gpi_logging.h"  // py_gpi_logger_set_level
 
 // This file defines the routines available to Python
 
@@ -166,13 +165,6 @@ template <>
 PyTypeObject gpi_hdl_Object<gpi_clk_hdl>::py_type;
 }  // namespace
 
-typedef int (*gpi_function_t)(void *);
-
-struct sim_time {
-    uint32_t high;
-    uint32_t low;
-};
-
 /**
  * @name    Callback Handling
  * @brief   Handle a callback coming from GPI
@@ -188,7 +180,7 @@ struct sim_time {
  * are waiting on that particular trigger.
  *
  */
-int handle_gpi_callback(void *user_data) {
+void handle_gpi_callback(void *user_data) {
     to_python();
     DEFER(to_simulator());
 
@@ -196,7 +188,7 @@ int handle_gpi_callback(void *user_data) {
 
     if (cb_data->id_value != COCOTB_ACTIVE_ID) {
         fprintf(stderr, "Userdata corrupted!\n");
-        return 1;
+        return;
     }
     cb_data->id_value = COCOTB_INACTIVE_ID;
 
@@ -207,7 +199,7 @@ int handle_gpi_callback(void *user_data) {
 
     if (!PyCallable_Check(cb_data->function)) {
         fprintf(stderr, "Callback fired but function isn't callable?!\n");
-        return 1;
+        return;
     }
 
     // Call the callback
@@ -219,8 +211,8 @@ int handle_gpi_callback(void *user_data) {
     // calls will go back to Python which is now in an unknown state
     if (pValue == NULL) {
         PyErr_Print();
-        gpi_sim_end();
-        return 0;
+        gpi_end_sim();
+        return;
     }
 
     // We don't care about the result
@@ -230,8 +222,6 @@ int handle_gpi_callback(void *user_data) {
     if (cb_data->id_value == COCOTB_INACTIVE_ID) {
         delete cb_data;
     }
-
-    return 0;
 }
 
 // Register a callback for read-only state of sim
@@ -270,8 +260,8 @@ static PyObject *register_readonly_callback(PyObject *, PyObject *args) {
 
     PythonCallback *cb_data = new PythonCallback(function, fArgs, NULL);
 
-    gpi_cb_hdl hdl = gpi_register_readonly_callback(
-        (gpi_function_t)handle_gpi_callback, cb_data);
+    gpi_cb_hdl hdl =
+        gpi_register_readonly_callback(handle_gpi_callback, cb_data);
 
     PyObject *rv = gpi_hdl_New(hdl);
 
@@ -311,8 +301,8 @@ static PyObject *register_rwsynch_callback(PyObject *, PyObject *args) {
 
     PythonCallback *cb_data = new PythonCallback(function, fArgs, NULL);
 
-    gpi_cb_hdl hdl = gpi_register_readwrite_callback(
-        (gpi_function_t)handle_gpi_callback, cb_data);
+    gpi_cb_hdl hdl =
+        gpi_register_readwrite_callback(handle_gpi_callback, cb_data);
 
     PyObject *rv = gpi_hdl_New(hdl);
 
@@ -352,8 +342,8 @@ static PyObject *register_nextstep_callback(PyObject *, PyObject *args) {
 
     PythonCallback *cb_data = new PythonCallback(function, fArgs, NULL);
 
-    gpi_cb_hdl hdl = gpi_register_nexttime_callback(
-        (gpi_function_t)handle_gpi_callback, cb_data);
+    gpi_cb_hdl hdl =
+        gpi_register_nexttime_callback(handle_gpi_callback, cb_data);
 
     PyObject *rv = gpi_hdl_New(hdl);
 
@@ -412,8 +402,8 @@ static PyObject *register_timed_callback(PyObject *, PyObject *args) {
 
     PythonCallback *cb_data = new PythonCallback(function, fArgs, NULL);
 
-    gpi_cb_hdl hdl = gpi_register_timed_callback(
-        (gpi_function_t)handle_gpi_callback, cb_data, time);
+    gpi_cb_hdl hdl =
+        gpi_register_timed_callback(handle_gpi_callback, cb_data, time);
 
     // Check success
     PyObject *rv = gpi_hdl_New(hdl);
@@ -471,8 +461,8 @@ static PyObject *register_value_change_callback(
 
     PythonCallback *cb_data = new PythonCallback(function, fArgs, NULL);
 
-    gpi_cb_hdl hdl = gpi_register_value_change_callback(
-        (gpi_function_t)handle_gpi_callback, cb_data, sig_hdl, edge);
+    gpi_cb_hdl hdl = gpi_register_value_change_callback(handle_gpi_callback,
+                                                        cb_data, sig_hdl, edge);
 
     // Check success
     PyObject *rv = gpi_hdl_New(hdl);
@@ -519,7 +509,7 @@ static PyObject *get_signal_val_binstr(gpi_hdl_Object<gpi_sim_hdl> *self,
     if (result == NULL) {
         // LCOV_EXCL_START
         PyErr_SetString(PyExc_RuntimeError,
-                        "Simulator yielded a null pointer instead of binstr");
+                        "Error getting value from simulator");
         return NULL;
         // LCOV_EXCL_STOP
     }
@@ -532,7 +522,7 @@ static PyObject *get_signal_val_str(gpi_hdl_Object<gpi_sim_hdl> *self,
     if (result == NULL) {
         // LCOV_EXCL_START
         PyErr_SetString(PyExc_RuntimeError,
-                        "Simulator yielded a null pointer instead of string");
+                        "Error getting value from simulator");
         return NULL;
         // LCOV_EXCL_STOP
     }
@@ -541,13 +531,29 @@ static PyObject *get_signal_val_str(gpi_hdl_Object<gpi_sim_hdl> *self,
 
 static PyObject *get_signal_val_real(gpi_hdl_Object<gpi_sim_hdl> *self,
                                      PyObject *) {
-    double result = gpi_get_signal_value_real(self->hdl);
+    double result;
+    int err = gpi_get_signal_value_real(self->hdl, &result);
+    // LCOV_EXCL_START
+    if (err) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "Error getting value from simulator");
+        return NULL;
+    }
+    // LCOV_EXCL_STOP
     return PyFloat_FromDouble(result);
 }
 
 static PyObject *get_signal_val_long(gpi_hdl_Object<gpi_sim_hdl> *self,
                                      PyObject *) {
-    long result = gpi_get_signal_value_long(self->hdl);
+    int64_t result;
+    int err = gpi_get_signal_value_long(self->hdl, &result);
+    // LCOV_EXCL_START
+    if (err) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "Error getting value from simulator");
+        return NULL;
+    }
+    // LCOV_EXCL_STOP
     return PyLong_FromLong(result);
 }
 
@@ -560,7 +566,14 @@ static PyObject *set_signal_val_binstr(gpi_hdl_Object<gpi_sim_hdl> *self,
         return NULL;
     }
 
-    gpi_set_signal_value_binstr(self->hdl, binstr, action);
+    int err = gpi_set_signal_value_binstr(self->hdl, binstr, action);
+    // LCOV_EXCL_START
+    if (err) {
+        PyErr_SetString(PyExc_RuntimeError, "Error setting value in simulator");
+        return NULL;
+    }
+    // LCOV_EXCL_STOP
+
     Py_RETURN_NONE;
 }
 
@@ -573,7 +586,14 @@ static PyObject *set_signal_val_str(gpi_hdl_Object<gpi_sim_hdl> *self,
         return NULL;
     }
 
-    gpi_set_signal_value_str(self->hdl, str, action);
+    int err = gpi_set_signal_value_str(self->hdl, str, action);
+    // LCOV_EXCL_START
+    if (err) {
+        PyErr_SetString(PyExc_RuntimeError, "Error setting value in simulator");
+        return NULL;
+    }
+    // LCOV_EXCL_STOP
+
     Py_RETURN_NONE;
 }
 
@@ -586,7 +606,14 @@ static PyObject *set_signal_val_real(gpi_hdl_Object<gpi_sim_hdl> *self,
         return NULL;
     }
 
-    gpi_set_signal_value_real(self->hdl, value, action);
+    int err = gpi_set_signal_value_real(self->hdl, value, action);
+    // LCOV_EXCL_START
+    if (err) {
+        PyErr_SetString(PyExc_RuntimeError, "Error setting value in simulator");
+        return NULL;
+    }
+    // LCOV_EXCL_STOP
+
     Py_RETURN_NONE;
 }
 
@@ -599,7 +626,21 @@ static PyObject *set_signal_val_int(gpi_hdl_Object<gpi_sim_hdl> *self,
         return NULL;
     }
 
-    gpi_set_signal_value_int(self->hdl, static_cast<int32_t>(value), action);
+    if (value < INT32_MIN || INT32_MAX < value) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "Value does not fit in a 32-bit signed integer");
+        return NULL;
+    }
+
+    int err = gpi_set_signal_value_int(self->hdl, static_cast<int32_t>(value),
+                                       action);
+    // LCOV_EXCL_START
+    if (err) {
+        PyErr_SetString(PyExc_RuntimeError, "Error setting value in simulator");
+        return NULL;
+    }
+    // LCOV_EXCL_STOP
+
     Py_RETURN_NONE;
 }
 
@@ -696,22 +737,14 @@ static PyObject *get_sim_time(PyObject *, PyObject *) {
         return NULL;
     }
 
-    struct sim_time local_time;
+    uint64_t res = gpi_get_sim_time();
+    if (res > LONG_LONG_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "Value does not fit in a 64-bit signed integer");
+        return NULL;
+    }
 
-    gpi_get_sim_time(&local_time.high, &local_time.low);
-
-    PyObject *pTuple = PyTuple_New(2);
-    PyTuple_SetItem(
-        pTuple, 0,
-        PyLong_FromUnsignedLong(
-            local_time
-                .high));  // Note: This function “steals” a reference to o.
-    PyTuple_SetItem(
-        pTuple, 1,
-        PyLong_FromUnsignedLong(
-            local_time.low));  // Note: This function “steals” a reference to o.
-
-    return pTuple;
+    return PyLong_FromLongLong(static_cast<long long>(res));
 }
 
 static PyObject *get_precision(PyObject *, PyObject *) {
@@ -724,9 +757,7 @@ static PyObject *get_precision(PyObject *, PyObject *) {
         return PyLong_FromLong(-15);  // preserves old behavior
     }
 
-    int32_t precision;
-
-    gpi_get_sim_precision(&precision);
+    int32_t precision = gpi_get_sim_precision();
 
     return PyLong_FromLong(precision);
 }
@@ -768,13 +799,17 @@ static PyObject *get_indexable(gpi_hdl_Object<gpi_sim_hdl> *self, PyObject *) {
     return PyBool_FromLong(indexable);
 }
 
+static PyObject *is_signal(gpi_hdl_Object<gpi_sim_hdl> *self, PyObject *) {
+    return PyBool_FromLong(gpi_is_signal(self->hdl));
+}
+
 static PyObject *stop_simulator(PyObject *, PyObject *) {
     if (!gpi_has_registered_impl()) {
         PyErr_SetString(PyExc_RuntimeError, "No simulator available!");
         return NULL;
     }
 
-    gpi_sim_end();
+    gpi_end_sim();
     Py_RETURN_NONE;
 }
 
@@ -1362,6 +1397,11 @@ static PyMethodDef gpi_sim_hdl_methods[] = {
                "--\n\n"
                "get_indexable() -> bool\n"
                "Return ``True`` if indexable.")},
+    {"is_signal", (PyCFunction)is_signal, METH_NOARGS,
+     PyDoc_STR("is_signal($self)\n"
+               "--\n\n"
+               "is_signal() -> bool\n"
+               "Return ``True`` if signal.")},
     {"iterate", (PyCFunction)iterate, METH_VARARGS,
      PyDoc_STR(
          "iterate($self, mode, /)\n"

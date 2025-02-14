@@ -2,11 +2,12 @@
 // Licensed under the Revised BSD License, see LICENSE for details.
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <cocotb_utils.h>  // xstr, utils_dyn_open, utils_dyn_sym
-#include <embed.h>
-#include <gpi.h>  // gpi_event_t
+#include "embed.h"
 
 #include <cstdlib>  // getenv
+
+#include "cocotb_utils.h"  // xstr, utils_dyn_open, utils_dyn_sym, DEFER
+
 #ifdef _WIN32
 #include <windows.h>  // Win32 API for loading the embed impl library
 
@@ -25,12 +26,10 @@
 #define EMBED_IMPL_LIB_STR xstr(EMBED_IMPL_LIB)
 #endif
 
-static void (*_embed_init_python)();
-static void (*_embed_sim_cleanup)();
-static int (*_embed_sim_init)(int argc, char const *const *argv);
-static void (*_embed_sim_event)(const char *msg);
-
-static bool init_failed = false;
+static int (*_user_initialize)(int argc, char const *const *argv);
+static void (*_user_finalize)();
+static void (*_user_start_sim)();
+static void (*_user_stop_sim)();
 
 #ifdef _WIN32
 static ACTCTX act_ctx = {
@@ -53,116 +52,93 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID) {
 }
 #endif
 
-extern "C" void embed_init_python(void) {
+extern "C" int user_initialize(int argc, char const *const *argv) {
     // preload python library
     char const *libpython_path = getenv("LIBPYTHON_LOC");
     if (!libpython_path) {
         // default to libpythonX.X.so
         libpython_path = PYTHON_LIB_STR;
     }
+
     auto loaded = utils_dyn_open(libpython_path);
+    // LCOV_EXCL_START
     if (!loaded) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
+        return -1;
     }
+    // LCOV_EXCL_STOP
+    // TODO do we need to close the dynamic library?
 
 #ifdef _WIN32
+    // LCOV_EXCL_START
     if (!act_ctx.hModule) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
+        return -1;
     }
+    // LCOV_EXCL_STOP
 
     HANDLE hact_ctx = CreateActCtx(&act_ctx);
+    // LCOV_EXCL_START
     if (hact_ctx == INVALID_HANDLE_VALUE) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
+        return -1;
     }
+    // LCOV_EXCL_STOP
+    DEFER(ReleaseActCtx(hact_ctx));
 
     ULONG_PTR Cookie;
-    if (!ActivateActCtx(hact_ctx, &Cookie)) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
+    auto ok = ActivateActCtx(hact_ctx, &Cookie);
+    // LCOV_EXCL_START
+    if (!ok) {
+        return -1;
     }
+    // LCOV_EXCL_STOP
+    DEFER(DeactivateActCtx(0, Cookie));
 #endif
 
     // load embed implementation library and functions
-    void *embed_impl_lib_handle;
-    if (!(embed_impl_lib_handle = utils_dyn_open(EMBED_IMPL_LIB_STR))) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
+    void *embed_impl_lib_handle = utils_dyn_open(EMBED_IMPL_LIB_STR);
+    // LCOV_EXCL_START
+    if (!embed_impl_lib_handle) {
+        return -1;
     }
-    if (!(_embed_init_python = reinterpret_cast<decltype(_embed_init_python)>(
-              utils_dyn_sym(embed_impl_lib_handle, "_embed_init_python")))) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
-    }
-    if (!(_embed_sim_cleanup = reinterpret_cast<decltype(_embed_sim_cleanup)>(
-              utils_dyn_sym(embed_impl_lib_handle, "_embed_sim_cleanup")))) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
-    }
-    if (!(_embed_sim_init = reinterpret_cast<decltype(_embed_sim_init)>(
-              utils_dyn_sym(embed_impl_lib_handle, "_embed_sim_init")))) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
-    }
-    if (!(_embed_sim_event = reinterpret_cast<decltype(_embed_sim_event)>(
-              utils_dyn_sym(embed_impl_lib_handle, "_embed_sim_event")))) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
-    }
+    // LCOV_EXCL_STOP
 
-#ifdef _WIN32
-    if (!DeactivateActCtx(0, Cookie)) {
-        // LCOV_EXCL_START
-        init_failed = true;
-        return;
-        // LCOV_EXCL_STOP
+    _user_initialize = reinterpret_cast<decltype(_user_initialize)>(
+        utils_dyn_sym(embed_impl_lib_handle, "_embed_init_python"));
+    // LCOV_EXCL_START
+    if (!_user_initialize) {
+        return -1;
     }
+    // LCOV_EXCL_STOP
 
-    ReleaseActCtx(hact_ctx);
-#endif
+    _user_finalize = reinterpret_cast<decltype(_user_finalize)>(
+        utils_dyn_sym(embed_impl_lib_handle, "_embed_sim_cleanup"));
+    // LCOV_EXCL_START
+    if (!_user_finalize) {
+        return -1;
+    }
+    // LCOV_EXCL_STOP
+
+    _user_start_sim = reinterpret_cast<decltype(_user_start_sim)>(
+        utils_dyn_sym(embed_impl_lib_handle, "_embed_sim_init"));
+    // LCOV_EXCL_START
+    if (!_user_start_sim) {
+        return -1;
+    }
+    // LCOV_EXCL_STOP
+
+    _user_stop_sim = reinterpret_cast<decltype(_user_stop_sim)>(
+        utils_dyn_sym(embed_impl_lib_handle, "_embed_sim_event"));
+    // LCOV_EXCL_START
+    if (!_user_stop_sim) {
+        return -1;
+    }
+    // LCOV_EXCL_STOP
 
     // call to embed library impl
-    _embed_init_python();
+    return _user_initialize(argc, argv);
 }
 
-extern "C" void embed_sim_cleanup(void) {
-    if (!init_failed) {
-        _embed_sim_cleanup();
-    }
-}
+extern "C" void user_finalize() { _user_finalize(); }
 
-extern "C" int embed_sim_init(int argc, char const *const *argv) {
-    if (init_failed) {
-        // LCOV_EXCL_START
-        return -1;
-        // LCOV_EXCL_STOP
-    } else {
-        return _embed_sim_init(argc, argv);
-    }
-}
+extern "C" void user_start_sim() { _user_start_sim(); }
 
-extern "C" void embed_sim_event(const char *msg) {
-    if (!init_failed) {
-        _embed_sim_event(msg);
-    }
-}
+extern "C" void user_stop_sim() { _user_stop_sim(); }
