@@ -1,21 +1,20 @@
 # Copyright cocotb contributors
 # Licensed under the Revised BSD License, see LICENSE for details.
 # SPDX-License-Identifier: BSD-3-Clause
-import os
 from collections import OrderedDict
-from typing import Any, Callable, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Sequence, Tuple, Union
 
 import cocotb
-import cocotb.handle
 import cocotb.task
 from cocotb.triggers import Event, ReadWrite
 
-trust_inertial = bool(int(os.environ.get("COCOTB_TRUST_INERTIAL_WRITES", "0")))
+if TYPE_CHECKING:
+    from cocotb.handle import ValueObjectBase
 
 # A dictionary of pending (write_func, args), keyed by handle.
 # Writes are applied oldest to newest (least recently used).
 # Only the last scheduled write to a particular handle in a timestep is performed.
-_write_calls: "OrderedDict[cocotb.handle.SimHandleBase, Tuple[Callable[..., None], Sequence[Any]]]" = OrderedDict()
+_write_calls: "OrderedDict[ValueObjectBase[Any, Any], Tuple[Callable[..., None], Sequence[Any]]]" = OrderedDict()
 
 # TODO don't use a task to force ReadWrite, just prime an empty callback
 
@@ -53,34 +52,11 @@ def apply_scheduled_writes() -> None:
     _writes_pending.clear()
 
 
-if trust_inertial:
-
-    def schedule_write(
-        handle: cocotb.handle.SimHandleBase,
-        write_func: Callable[..., None],
-        args: Sequence[Any],
-    ) -> None:
-        if cocotb.sim_phase == cocotb.SimPhase.READ_ONLY:
-            raise RuntimeError(
-                f"Write to object {handle._name} was scheduled during a read-only simulation phase."
-            )
-        write_func(*args)
-else:
-
-    def schedule_write(
-        handle: cocotb.handle.SimHandleBase,
-        write_func: Callable[..., None],
-        args: Sequence[Any],
-    ) -> None:
-        """Queue *write_func* to be called on the next ``ReadWrite`` trigger."""
-        if cocotb.sim_phase == cocotb.SimPhase.READ_WRITE:
-            write_func(*args)
-        elif cocotb.sim_phase == cocotb.SimPhase.READ_ONLY:
-            raise RuntimeError(
-                f"Write to object {handle._name} was scheduled during a read-only simulation phase."
-            )
-        else:
-            if handle in _write_calls:
-                del _write_calls[handle]
-            _write_calls[handle] = (write_func, args)
-            _writes_pending.set()
+def schedule_write(
+    handle: "ValueObjectBase[Any, Any]", write_func: Callable[..., None], *args: Any
+) -> None:
+    """Queue *write_func* to be called on the next ``ReadWrite`` trigger."""
+    if handle in _write_calls:
+        del _write_calls[handle]
+    _write_calls[handle] = (write_func, args)
+    _writes_pending.set()
