@@ -51,7 +51,7 @@ class Trigger(Awaitable["Trigger"]):
     """Base class to derive from."""
 
     def __init__(self) -> None:
-        self._primed = False
+        self._callback: Optional[Callable[[Trigger], None]] = None
 
     @cached_property
     def _log(self) -> logging.Logger:
@@ -69,8 +69,9 @@ class Trigger(Awaitable["Trigger"]):
             Do not call this directly within a :term:`task`. It is intended to be used
             only by the scheduler.
         """
-        # Set _primed so the trigger can test if it's already been primed and behave appropriately.
-        self._primed = True
+        if self._callback is not None and callback != self._callback:
+            raise RuntimeError("Trigger primed more than once with different callbacks")
+        self._callback = callback
 
     def _unprime(self) -> None:
         """Remove the callback, and perform cleanup if necessary.
@@ -90,7 +91,12 @@ class Trigger(Awaitable["Trigger"]):
 
     def _cleanup(self) -> None:
         # Clear _primed so this Trigger can be re-primed.
-        self._primed = False
+        self._callback = None
+
+    def _react(self) -> None:
+        """Call all registered callbacks when the Trigger fires."""
+        if self._callback is not None:
+            self._callback(self)
 
     def __await__(self: Self) -> Generator[Self, None, Self]:
         yield self
@@ -109,17 +115,14 @@ class _Event(Trigger):
         self._parent = parent
 
     def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        if self._primed:
+        if self._callback is not None:
             raise RuntimeError(
                 "Event.wait() result can only be used by one task at a time"
             )
-        self._callback = callback
-        self._parent._prime_trigger(self, callback)
+        self._parent._prime_trigger(self)
         return super()._prime(callback)
 
     def _unprime(self) -> None:
-        if not self._primed:
-            return
         self._parent._unprime_trigger(self)
         return super()._unprime()
 
@@ -180,9 +183,7 @@ class Event:
     def data(self, new_data: Any) -> None:
         self._data = new_data
 
-    def _prime_trigger(
-        self, trigger: _Event, callback: Callable[[Trigger], None]
-    ) -> None:
+    def _prime_trigger(self, trigger: _Event) -> None:
         self._pending_events.append(trigger)
 
     def _unprime_trigger(self, trigger: _Event) -> None:
@@ -200,7 +201,7 @@ class Event:
 
         pending_events, self._pending_events = self._pending_events, []
         for event in pending_events:
-            event._callback(event)
+            event._react()
 
     def wait(self) -> Trigger:
         """Block the current Task until the Event is set.
@@ -251,12 +252,11 @@ class _InternalEvent(Trigger):
         self.fired: bool = False
 
     def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        if self._primed:
+        if self._callback is not None:
             raise RuntimeError("This Trigger may only be awaited once")
-        self._callback = callback
         super()._prime(callback)
         if self.fired:
-            self._callback(self)
+            self._react()
 
     def _cleanup(self) -> None:
         # Don't clear _primed so a second call to _prime() fails.
@@ -266,8 +266,7 @@ class _InternalEvent(Trigger):
         """Wake up coroutine blocked on this event."""
         self.fired = True
 
-        if self._callback is not None:
-            self._callback(self)
+        self._react()
 
     def is_set(self) -> bool:
         """Return true if event has been set."""
@@ -276,7 +275,7 @@ class _InternalEvent(Trigger):
     def __await__(
         self: Self,
     ) -> Generator[Any, Any, Self]:
-        if self._primed:
+        if self._callback is not None:
             raise RuntimeError("Only one Task may await this Trigger")
         yield self
         return self
@@ -297,17 +296,14 @@ class _Lock(Trigger):
         self._parent = parent
 
     def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        if self._primed:
+        if self._callback is not None:
             raise RuntimeError(
                 "Lock.acquire() result can only be used by one task at a time"
             )
-        self._callback = callback
         self._parent._prime_lock(self)
         return super()._prime(callback)
 
     def _unprime(self) -> None:
-        if not self._primed:
-            return
         self._parent._unprime_lock(self)
         return super()._unprime()
 
@@ -362,7 +358,7 @@ class Lock(AsyncContextManager[None]):
 
     def _acquire_and_fire(self, lock: _Lock) -> None:
         self._locked = True
-        lock._callback(lock)
+        lock._react()
 
     def _prime_lock(self, lock: _Lock) -> None:
         if not self._locked:
@@ -426,10 +422,10 @@ class NullTrigger(Trigger):
         self.name = name
 
     def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        if self._primed:
-            return
-        callback(self)
-        return super()._prime(callback)
+        if self._callback is not None:
+            raise RuntimeError("NullTrigger() may only be used by one task at a time")
+        super()._prime(callback)
+        self._react()
 
     def __repr__(self) -> str:
         if self.name is None:

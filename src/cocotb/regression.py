@@ -467,7 +467,7 @@ class RegressionManager:
             lambda _: cocotb._scheduler_inst.shutdown_soon()
         )
         cocotb._scheduler_inst._schedule_task_internal(self._test_task)
-        cocotb._scheduler_inst._event_loop()
+        cocotb._scheduler_inst.run()
 
     def _tear_down(self) -> None:
         """Called by :meth:`_execute` when there are no more tests to run to finalize the regression."""

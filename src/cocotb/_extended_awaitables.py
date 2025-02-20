@@ -95,9 +95,9 @@ class TaskComplete(Trigger, Generic[T]):
 
     def _prime(self, callback: Callable[[Trigger], None]) -> None:
         if self._task.done():
-            callback(self)
+            self._react()
         else:
-            super()._prime(callback)
+            return super()._prime(callback)
 
     def __repr__(self) -> str:
         return f"{type(self).__qualname__}({self._task!s})"

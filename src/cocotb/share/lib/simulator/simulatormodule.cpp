@@ -43,6 +43,7 @@
 #include <type_traits>
 
 #include "gpi.h"
+#include "object.h"
 
 // This file defines the routines available to Python
 
