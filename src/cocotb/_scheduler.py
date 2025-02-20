@@ -51,7 +51,6 @@ from cocotb._gpi_triggers import (
     ReadWrite,
     Trigger,
 )
-from cocotb._profiling import profiling_context
 from cocotb.task import Task
 from cocotb.triggers import Event
 
@@ -252,32 +251,7 @@ class Scheduler:
         # call complete cb, may schedule another test
         self._test_complete_cb()
 
-    def _sim_react(self, trigger: Trigger) -> None:
-        """Called when a :class:`~cocotb.triggers.GPITrigger` fires.
-
-        This is often the entry point into Python from the simulator,
-        so this function is in charge of enabling profiling.
-        It must also track the current simulator time phase,
-        and start the unstarted event loop.
-        """
-        with profiling_context:
-            # TODO: move state tracking to global variable
-            # and handle this via some kind of trigger-specific Python callback
-            if trigger is self._read_write:
-                cocotb.sim_phase = cocotb.SimPhase.READ_WRITE
-            elif trigger is self._read_only:
-                cocotb.sim_phase = cocotb.SimPhase.READ_ONLY
-            else:
-                cocotb.sim_phase = cocotb.SimPhase.NORMAL
-
-            # apply inertial writes if ReadWrite
-            if trigger is self._read_write:
-                cocotb._write_scheduler.apply_scheduled_writes()
-
-            self._react(trigger)
-            self._event_loop()
-
-    def _react(self, trigger: Trigger) -> None:
+    def react(self, trigger: Trigger) -> None:
         """Called when a :class:`~cocotb.triggers.Trigger` fires.
 
         Finds all Tasks waiting on the Trigger that fired and queues them.
@@ -316,10 +290,7 @@ class Scheduler:
             task._trigger = None
             self._schedule_task_internal(task)
 
-        # cleanup trigger
-        trigger._cleanup()
-
-    def _event_loop(self) -> None:
+    def run(self) -> None:
         """Run the main event loop.
 
         This should only be started by:
@@ -382,7 +353,7 @@ class Scheduler:
             return
 
         elif task.complete in self._trigger2tasks:
-            self._react(task.complete)
+            self.react(task.complete)
 
     def _schedule_task_upon(self, task: Task[Any], trigger: Trigger) -> None:
         """Schedule `task` to be resumed when `trigger` fires."""
@@ -394,12 +365,7 @@ class Scheduler:
         trigger_tasks.append(task)
 
         try:
-            # TODO maybe associate the react method with the trigger object so
-            # we don't have to do a type check here.
-            if isinstance(trigger, GPITrigger):
-                trigger._prime(self._sim_react)
-            else:
-                trigger._prime(self._react)
+            trigger._prime()
         except Exception as e:
             # discard the trigger we associated, it will never fire
             self._trigger2tasks.pop(trigger)

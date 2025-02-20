@@ -33,13 +33,13 @@ from typing import (
     Any,
     AsyncContextManager,
     Awaitable,
-    Callable,
     Generator,
     List,
     Optional,
     TypeVar,
 )
 
+import cocotb
 from cocotb._deprecation import deprecated
 from cocotb._py_compat import cached_property
 from cocotb._utils import pointer_str
@@ -57,7 +57,7 @@ class Trigger(Awaitable["Trigger"]):
     def _log(self) -> logging.Logger:
         return logging.getLogger(f"cocotb.{type(self).__qualname__}.0x{id(self):x}")
 
-    def _prime(self, callback: Callable[["Trigger"], None]) -> None:
+    def _prime(self) -> None:
         """Set a callback to be invoked when the trigger fires.
 
         The callback will be invoked with a single argument, `self`.
@@ -92,6 +92,10 @@ class Trigger(Awaitable["Trigger"]):
         # Clear _primed so this Trigger can be re-primed.
         self._primed = False
 
+    def _react(self) -> None:
+        """Call all registered callbacks when the Trigger fires."""
+        cocotb._scheduler_inst.react(self)
+
     def __await__(self: Self) -> Generator[Self, None, Self]:
         yield self
         return self
@@ -108,14 +112,13 @@ class _Event(Trigger):
         super().__init__()
         self._parent = parent
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
             raise RuntimeError(
                 "Event.wait() result can only be used by one task at a time"
             )
-        self._callback = callback
-        self._parent._prime_trigger(self, callback)
-        return super()._prime(callback)
+        self._parent._prime_trigger(self)
+        return super()._prime()
 
     def _unprime(self) -> None:
         if not self._primed:
@@ -180,9 +183,7 @@ class Event:
     def data(self, new_data: Any) -> None:
         self._data = new_data
 
-    def _prime_trigger(
-        self, trigger: _Event, callback: Callable[[Trigger], None]
-    ) -> None:
+    def _prime_trigger(self, trigger: _Event) -> None:
         self._pending_events.append(trigger)
 
     def _unprime_trigger(self, trigger: _Event) -> None:
@@ -200,7 +201,7 @@ class Event:
 
         pending_events, self._pending_events = self._pending_events, []
         for event in pending_events:
-            event._callback(event)
+            event._react()
 
     def wait(self) -> Trigger:
         """Block the current Task until the Event is set.
@@ -247,16 +248,14 @@ class _InternalEvent(Trigger):
     def __init__(self, parent: object) -> None:
         super().__init__()
         self._parent = parent
-        self._callback: Optional[Callable[[Trigger], None]] = None
         self.fired: bool = False
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
             raise RuntimeError("This Trigger may only be awaited once")
-        self._callback = callback
-        super()._prime(callback)
+        super()._prime()
         if self.fired:
-            self._callback(self)
+            self._react()
 
     def _cleanup(self) -> None:
         # Don't clear _primed so a second call to _prime() fails.
@@ -266,8 +265,8 @@ class _InternalEvent(Trigger):
         """Wake up coroutine blocked on this event."""
         self.fired = True
 
-        if self._callback is not None:
-            self._callback(self)
+        if self._primed:
+            self._react()
 
     def is_set(self) -> bool:
         """Return true if event has been set."""
@@ -296,14 +295,13 @@ class _Lock(Trigger):
         super().__init__()
         self._parent = parent
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
             raise RuntimeError(
                 "Lock.acquire() result can only be used by one task at a time"
             )
-        self._callback = callback
         self._parent._prime_lock(self)
-        return super()._prime(callback)
+        return super()._prime()
 
     def _unprime(self) -> None:
         if not self._primed:
@@ -362,7 +360,7 @@ class Lock(AsyncContextManager[None]):
 
     def _acquire_and_fire(self, lock: _Lock) -> None:
         self._locked = True
-        lock._callback(lock)
+        lock._react()
 
     def _prime_lock(self, lock: _Lock) -> None:
         if not self._locked:
@@ -425,11 +423,11 @@ class NullTrigger(Trigger):
         super().__init__()
         self.name = name
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
             return
-        callback(self)
-        return super()._prime(callback)
+        super()._prime()
+        self._react()
 
     def __repr__(self) -> str:
         if self.name is None:
