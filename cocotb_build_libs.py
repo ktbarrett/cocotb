@@ -253,9 +253,9 @@ class build_ext(_build_ext):
                 rc_filename = name + ".rc"
                 runtime_libraries = None
 
-                # Add the runtime dependency on libcocotb to libembed
-                if name == "libembed":
-                    runtime_libraries = ["libcocotb"]
+                # Add the runtime dependency on libgpi to libpygpi
+                if name == "libgpi":
+                    runtime_libraries = ["simulator"]
 
                 # Strip lib prefix for msvc
                 if self._uses_msvc():
