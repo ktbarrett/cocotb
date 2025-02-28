@@ -38,11 +38,11 @@ import logging
 import os
 import threading
 from collections import OrderedDict
-from typing import Any, Dict
+from typing import Any
 
 import cocotb
 import cocotb.handle
-from cocotb import _outcomes, _py_compat
+from cocotb import _outcomes
 from cocotb._exceptions import InternalError
 from cocotb._gpi_triggers import (
     GPITrigger,
@@ -51,7 +51,6 @@ from cocotb._gpi_triggers import (
     ReadWrite,
     Trigger,
 )
-from cocotb._profiling import profiling_context
 from cocotb.task import Task
 from cocotb.triggers import Event
 
@@ -219,12 +218,6 @@ class Scheduler:
         if _debug:
             self.log.setLevel(logging.DEBUG)
 
-        # A dictionary of pending tasks for each trigger,
-        # indexed by trigger
-        self._trigger2tasks: Dict[Trigger, list[Task]] = (
-            _py_compat.insertion_ordered_dict()
-        )
-
         self._scheduled_tasks: OrderedDict[Task[Any], _outcomes.Outcome] = OrderedDict()
         self._pending_threads = []
         self._pending_events = []  # Events we need to call set on once we've unwound
@@ -232,73 +225,6 @@ class Scheduler:
         self._main_thread = threading.current_thread()
 
         self._current_task = None
-
-    def _sim_react(self, trigger: Trigger) -> None:
-        """Called when a :class:`~cocotb.triggers.GPITrigger` fires.
-
-        This is often the entry point into Python from the simulator,
-        so this function is in charge of enabling profiling.
-        It must also track the current simulator time phase,
-        and start the unstarted event loop.
-        """
-        with profiling_context:
-            # TODO: move state tracking to global variable
-            # and handle this via some kind of trigger-specific Python callback
-            if trigger is self._read_write:
-                cocotb.sim_phase = cocotb.SimPhase.READ_WRITE
-            elif trigger is self._read_only:
-                cocotb.sim_phase = cocotb.SimPhase.READ_ONLY
-            else:
-                cocotb.sim_phase = cocotb.SimPhase.NORMAL
-
-            # apply inertial writes if ReadWrite
-            if trigger is self._read_write:
-                cocotb.handle._apply_scheduled_writes()
-
-            self._react(trigger)
-            self._event_loop()
-
-    def _react(self, trigger: Trigger) -> None:
-        """Called when a :class:`~cocotb.triggers.Trigger` fires.
-
-        Finds all Tasks waiting on the Trigger that fired and queues them.
-        """
-        if _debug:
-            self.log.debug(f"Trigger fired: {trigger}")
-
-        # find all tasks waiting on trigger that fired
-        try:
-            scheduling = self._trigger2tasks.pop(trigger)
-        except KeyError:
-            # GPI triggers should only be ever pending if there is an
-            # associated task waiting on that trigger, otherwise it would
-            # have been unprimed already
-            if isinstance(trigger, GPITrigger):
-                self.log.critical(f"No tasks waiting on trigger that fired: {trigger}")
-                trigger._log.info("I'm the culprit")
-            # For Python triggers this isn't actually an error - we might do
-            # event.set() without knowing whether any tasks are actually
-            # waiting on this event, for example
-            elif _debug:
-                self.log.debug(f"No tasks waiting on trigger that fired: {trigger}")
-            return
-
-        if _debug:
-            debugstr = "\n\t".join([str(task) for task in scheduling])
-            if len(scheduling) > 0:
-                debugstr = "\n\t" + debugstr
-            self.log.debug(
-                f"{len(scheduling)} pending tasks for trigger {trigger}{debugstr}"
-            )
-
-        # queue all tasks to wake up
-        for task in scheduling:
-            # unset trigger
-            task._trigger = None
-            self._schedule_task_internal(task)
-
-        # cleanup trigger
-        trigger._cleanup()
 
     def _event_loop(self) -> None:
         """Run the main event loop.
@@ -357,7 +283,7 @@ class Scheduler:
                 trigger._unprime()
                 del self._trigger2tasks[trigger]
 
-        self._react(task.complete)
+        task.complete._react()
 
     def _schedule_task_upon(self, task: Task[Any], trigger: Trigger) -> None:
         """Schedule `task` to be resumed when `trigger` fires."""

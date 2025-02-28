@@ -29,6 +29,7 @@
 
 import logging
 import warnings
+from abc import abstractmethod
 from typing import (
     Any,
     AsyncContextManager,
@@ -42,55 +43,93 @@ from typing import (
 
 from cocotb._deprecation import deprecated
 from cocotb._py_compat import cached_property
-from cocotb._utils import pointer_str
+from cocotb._utils import Deck, pointer_str
+
+
+class CallbackHandle:
+    """A cancellable handle to a callback registered with a Trigger."""
+
+    def __init__(
+        self, trigger: "Trigger", func: Callable[..., Any], *args: Any
+    ) -> None:
+        self._func = func
+        self._args = args
+        self._trigger = trigger
+
+    def cancel(self) -> None:
+        self._trigger.deregister(self)
+
+    def _run(self) -> None:
+        self._func(*self._args)
+
 
 Self = TypeVar("Self", bound="Trigger")
 
 
 class Trigger(Awaitable["Trigger"]):
-    """Base class to derive from."""
+    """An :term:`awaitable <await>` event."""
 
     def __init__(self) -> None:
-        self._primed = False
+        # OrderedDict gives us O(1) append, pop, and random removal
+        self._callbacks = Deck[CallbackHandle]()
 
     @cached_property
     def _log(self) -> logging.Logger:
         return logging.getLogger(f"cocotb.{type(self).__qualname__}.0x{id(self):x}")
 
-    def _prime(self, callback: Callable[["Trigger"], None]) -> None:
-        """Set a callback to be invoked when the trigger fires.
+    @abstractmethod
+    def _prime(self) -> None:
+        """Setup the underlying trigger mechanism.
 
-        The callback will be invoked with a single argument, `self`.
-
-        Sub-classes must override this, but should end by calling the base class
-        method.
-
-        .. warning::
-            Do not call this directly within a :term:`task`. It is intended to be used
-            only by the scheduler.
+        This should set the underlying trigger mechanism to call :meth:`_react`.
         """
-        # Set _primed so the trigger can test if it's already been primed and behave appropriately.
-        self._primed = True
 
+    @abstractmethod
     def _unprime(self) -> None:
-        """Remove the callback, and perform cleanup if necessary.
+        """Disable and clean up the underlying trigger mechanism before it fires."""
 
-        After being un-primed, a Trigger may be re-primed again in the future.
-        Calling `_unprime` multiple times is allowed, subsequent calls should be
-        a no-op.
+    @abstractmethod
+    def _cleanup(self) -> None:
+        """Cleanup any state related to the underlying trigger mechanism after it fires."""
 
-        Sub-classes may override this, but should end by calling the base class
-        method.
+    def register(self, cb: Callable[..., None], *args: Any) -> CallbackHandle:
+        """Register the given callback to be called when the Trigger fires.
+
+        Calls :meth:`_prime` to register the underlying Trigger mechanism if a callback is added.
+
+        Returns:
+            A cancellable handle to the given callback.
 
         .. warning::
-            Do not call this directly within a :term:`task`. It is intended to be used
-            only by the scheduler.
+            Only intended for internal use.
         """
-        self._cleanup()
+        cb_handle = CallbackHandle(self, cb, *args)
+        self._callbacks.append(cb_handle)
+        # _prime must come after adding to _cb_handles in case _prime calls _react
+        self._prime()
+        return cb_handle
 
-    def _cleanup(self) -> None:
-        # Clear _primed so this Trigger can be re-primed.
-        self._primed = False
+    def deregister(self, cb_handle: CallbackHandle) -> None:
+        """Prevent the given callback from being called once the Trigger fires.
+
+        Calls :meth:`_unprime` to deregister the underlying Trigger mechanism if all callbacks are removed.
+
+        Args:
+            cb_handle: The Handle to the callback previously registered.
+
+        .. warning::
+            Only intended for internal use.
+        """
+        self._callbacks.remove(cb_handle)
+        if not self._callbacks:
+            self._unprime()
+
+    def _react(self) -> None:
+        """Call all registered callbacks when the Trigger fires."""
+        while self._callbacks:
+            handle = self._callbacks.pop()
+            handle._run()
+        self._cleanup()
 
     def __await__(self: Self) -> Generator[Self, None, Self]:
         yield self
@@ -98,30 +137,29 @@ class Trigger(Awaitable["Trigger"]):
 
 
 class _Event(Trigger):
-    """Unique instance used by the Event object.
-
-    One created for each attempt to wait on the event so that the scheduler
-    can maintain a unique mapping of triggers to tasks.
-    """
+    """Trigger friend object used by an Event object."""
 
     def __init__(self, parent: "Event") -> None:
         super().__init__()
         self._parent = parent
+        self._primed = False
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
+            # TODO Is this true? Can we remove this?
             raise RuntimeError(
                 "Event.wait() result can only be used by one task at a time"
             )
-        self._callback = callback
-        self._parent._prime_trigger(self, callback)
-        return super()._prime(callback)
+        self._primed = True
+
+        if self._parent.is_set():
+            self._react()
 
     def _unprime(self) -> None:
-        if not self._primed:
-            return
-        self._parent._unprime_trigger(self)
-        return super()._unprime()
+        self._primed = False
+
+    def _cleanup(self) -> None:
+        self._primed = False
 
     def __repr__(self) -> str:
         return f"<{self._parent!r}.wait() at {pointer_str(self)}>"
@@ -159,10 +197,10 @@ class Event:
     """
 
     def __init__(self, name: Optional[str] = None) -> None:
-        self._pending_events: List[_Event] = []
         self.name: Optional[str] = name
         self._fired: bool = False
         self._data: Any = None
+        self._event = _Event(self)
 
     @property
     @deprecated("The data field will be removed in a future release.")
@@ -180,14 +218,6 @@ class Event:
     def data(self, new_data: Any) -> None:
         self._data = new_data
 
-    def _prime_trigger(
-        self, trigger: _Event, callback: Callable[[Trigger], None]
-    ) -> None:
-        self._pending_events.append(trigger)
-
-    def _unprime_trigger(self, trigger: _Event) -> None:
-        self._pending_events.remove(trigger)
-
     def set(self, data: Optional[Any] = None) -> None:
         """Set the Event and unblock all Tasks blocked on this Event."""
         self._fired = True
@@ -197,10 +227,7 @@ class Event:
                 DeprecationWarning,
             )
         self._data = data
-
-        pending_events, self._pending_events = self._pending_events, []
-        for event in pending_events:
-            event._callback(event)
+        self._event._react()
 
     def wait(self) -> Trigger:
         """Block the current Task until the Event is set.
@@ -211,9 +238,7 @@ class Event:
         To reset the Event (and enable the use of :meth:`wait` again),
         call :meth:`clear`.
         """
-        if self._fired:
-            return NullTrigger(name=f"{str(self)}.wait()")
-        return _Event(self)
+        return self._event
 
     def clear(self) -> None:
         """Clear this event that has been set.
@@ -247,27 +272,26 @@ class _InternalEvent(Trigger):
     def __init__(self, parent: object) -> None:
         super().__init__()
         self._parent = parent
-        self._callback: Optional[Callable[[Trigger], None]] = None
         self.fired: bool = False
+        self._primed: bool = False
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
             raise RuntimeError("This Trigger may only be awaited once")
-        self._callback = callback
-        super()._prime(callback)
+        self._primed = True
         if self.fired:
-            self._callback(self)
+            self._react()
+
+    def _unprime(self) -> None:
+        pass
 
     def _cleanup(self) -> None:
-        # Don't clear _primed so a second call to _prime() fails.
         pass
 
     def set(self) -> None:
         """Wake up coroutine blocked on this event."""
         self.fired = True
-
-        if self._callback is not None:
-            self._callback(self)
+        self._react()
 
     def is_set(self) -> bool:
         """Return true if event has been set."""
@@ -276,7 +300,7 @@ class _InternalEvent(Trigger):
     def __await__(
         self: Self,
     ) -> Generator[Any, Any, Self]:
-        if self._primed:
+        if self._callbacks:
             raise RuntimeError("Only one Task may await this Trigger")
         yield self
         return self
@@ -295,21 +319,20 @@ class _Lock(Trigger):
     def __init__(self, parent: "Lock") -> None:
         super().__init__()
         self._parent = parent
+        self._primed: bool = False
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._primed:
-            raise RuntimeError(
-                "Lock.acquire() result can only be used by one task at a time"
-            )
-        self._callback = callback
+            raise RuntimeError("This Trigger may only be awaited once")
+        self._primed = True
         self._parent._prime_lock(self)
-        return super()._prime(callback)
 
     def _unprime(self) -> None:
-        if not self._primed:
-            return
         self._parent._unprime_lock(self)
-        return super()._unprime()
+        self._primed = False
+
+    def _cleanup(self) -> None:
+        self._primed = False
 
     def __repr__(self) -> str:
         return f"<{self._parent!r}.acquire() at {pointer_str(self)}>"
@@ -362,7 +385,7 @@ class Lock(AsyncContextManager[None]):
 
     def _acquire_and_fire(self, lock: _Lock) -> None:
         self._locked = True
-        lock._callback(lock)
+        lock._react()
 
     def _prime_lock(self, lock: _Lock) -> None:
         if not self._locked:
@@ -425,11 +448,14 @@ class NullTrigger(Trigger):
         super().__init__()
         self.name = name
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        if self._primed:
-            return
-        callback(self)
-        return super()._prime(callback)
+    def _prime(self) -> None:
+        self._react()
+
+    def _unprime(self) -> None:
+        pass
+
+    def _cleanup(self) -> None:
+        pass
 
     def __repr__(self) -> str:
         if self.name is None:

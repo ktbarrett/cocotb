@@ -32,7 +32,6 @@ from decimal import Decimal
 from typing import (
     Any,
     Awaitable,
-    Callable,
     Coroutine,
     Generator,
     Generic,
@@ -93,11 +92,15 @@ class TaskComplete(Trigger, Generic[T]):
         super().__init__()
         self._task = task
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
         if self._task.done():
-            callback(self)
-        else:
-            super()._prime(callback)
+            self._react()
+
+    def _unprime(self) -> None:
+        pass
+
+    def _cleanup(self) -> None:
+        pass
 
     def __repr__(self) -> str:
         return f"{type(self).__qualname__}({self._task!s})"

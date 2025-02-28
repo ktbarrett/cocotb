@@ -27,13 +27,14 @@
 
 """A collection of triggers which a testbench can :keyword:`await`."""
 
+from abc import abstractmethod
 from decimal import Decimal
 from fractions import Fraction
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
+    Generator,
     Generic,
     Optional,
     Type,
@@ -42,10 +43,12 @@ from typing import (
 )
 
 import cocotb
+import cocotb._write_scheduler
 import cocotb.handle
 from cocotb import simulator
-from cocotb._base_triggers import Trigger
+from cocotb._base_triggers import Self, Trigger
 from cocotb._deprecation import deprecated
+from cocotb._profiling import profiling_context
 from cocotb._typing import TimeUnit
 from cocotb._utils import pointer_str, singleton
 from cocotb.utils import get_sim_steps, get_time_from_sim_steps
@@ -65,14 +68,29 @@ class GPITrigger(Trigger):
         self._cbhdl: Optional[simulator.gpi_cb_hdl] = None
 
     def _unprime(self) -> None:
-        """Disable a primed trigger, can be re-primed."""
-        if self._cbhdl is not None:
-            self._cbhdl.deregister()
-        return super()._unprime()
+        assert self._cbhdl is not None
+        self._cbhdl.deregister()
+        self._cbhdl = None
 
     def _cleanup(self) -> None:
         self._cbhdl = None
-        return super()._cleanup()
+
+    @abstractmethod
+    def _pre_react(self) -> None:
+        """TODO"""
+
+    def _react(self) -> None:
+        """Called when a :class:`~cocotb.triggers.GPITrigger` fires.
+
+        This is often the entry point into Python from the simulator,
+        so this function is in charge of enabling profiling.
+        It must also track the current simulator time phase,
+        and start the unstarted event loop.
+        """
+        with profiling_context:
+            self._pre_react()
+            super()._react()
+            cocotb._scheduler_inst._event_loop()
 
 
 class Timer(GPITrigger):
@@ -168,15 +186,14 @@ class Timer(GPITrigger):
         if self._sim_steps == 0:
             self._sim_steps = 1
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        """Register for a timed callback."""
+    def _prime(self) -> None:
+        assert self._cbhdl is None
+        self._cbhdl = simulator.register_timed_callback(self._sim_steps, self._react)
         if self._cbhdl is None:
-            self._cbhdl = simulator.register_timed_callback(
-                self._sim_steps, callback, self
-            )
-            if self._cbhdl is None:
-                raise RuntimeError(f"Unable set up {str(self)} Trigger")
-        super()._prime(callback)
+            raise RuntimeError(f"Unable set up {str(self)} Trigger")
+
+    def _pre_react(self) -> None:
+        cocotb.sim_phase = cocotb.SimPhase.NORMAL
 
     def __repr__(self) -> str:
         return "<{} of {:1.2f}ps at {}>".format(
@@ -196,50 +213,63 @@ class ReadOnly(GPITrigger):
     Useful for monitors which need to wait for all processes to execute (both RTL and cocotb) to ensure sampled signal values are final.
     """
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
+        assert self._cbhdl is None
+        self._cbhdl = simulator.register_readonly_callback(self._react)
+        if self._cbhdl is None:
+            raise RuntimeError(f"Unable set up {str(self)} Trigger")
+
+    def _pre_react(self) -> None:
+        cocotb.sim_phase = cocotb.SimPhase.READ_ONLY
+
+    def __repr__(self) -> str:
+        return f"{type(self).__qualname__}()"
+
+    def __await__(self: Self) -> Generator[Self, None, Self]:
         if cocotb.sim_phase is cocotb.SimPhase.READ_ONLY:
             raise RuntimeError(
                 "Attempted illegal transition: awaiting ReadOnly in ReadOnly phase"
             )
-        if self._cbhdl is None:
-            self._cbhdl = simulator.register_readonly_callback(callback, self)
-            if self._cbhdl is None:
-                raise RuntimeError(f"Unable set up {str(self)} Trigger")
-        super()._prime(callback)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__qualname__}()"
+        return (yield from super().__await__())
 
 
 @singleton
 class ReadWrite(GPITrigger):
     """Fires when the read-write simulation phase is reached."""
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
+        assert self._cbhdl is None
+        self._cbhdl = simulator.register_rwsynch_callback(self._react)
+        if self._cbhdl is None:
+            raise RuntimeError(f"Unable set up {str(self)} Trigger")
+
+    def _pre_react(self) -> None:
+        cocotb.sim_phase = cocotb.SimPhase.READ_WRITE
+        cocotb._write_scheduler.apply_scheduled_writes()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__qualname__}()"
+
+    def __await__(self: Self) -> Generator[Self, None, Self]:
         if cocotb.sim_phase is cocotb.SimPhase.READ_ONLY:
             raise RuntimeError(
                 "Attempted illegal transition: awaiting ReadWrite in ReadOnly phase"
             )
-        if self._cbhdl is None:
-            self._cbhdl = simulator.register_rwsynch_callback(callback, self)
-            if self._cbhdl is None:
-                raise RuntimeError(f"Unable set up {str(self)} Trigger")
-        super()._prime(callback)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__qualname__}()"
+        return (yield from super().__await__())
 
 
 @singleton
 class NextTimeStep(GPITrigger):
     """Fires when the next time step is started."""
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
+        assert self._cbhdl is None
+        self._cbhdl = simulator.register_nextstep_callback(self._react)
         if self._cbhdl is None:
-            self._cbhdl = simulator.register_nextstep_callback(callback, self)
-            if self._cbhdl is None:
-                raise RuntimeError(f"Unable set up {str(self)} Trigger")
-        super()._prime(callback)
+            raise RuntimeError(f"Unable set up {str(self)} Trigger")
+
+    def _pre_react(self) -> None:
+        cocotb.sim_phase = cocotb.SimPhase.NORMAL
 
     def __repr__(self) -> str:
         return f"{type(self).__qualname__}()"
@@ -265,14 +295,16 @@ class _EdgeBase(GPITrigger, Generic[_SignalType]):
     def __init__(self, _: _SignalType) -> None:
         pass
 
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+    def _prime(self) -> None:
+        assert self._cbhdl is None
+        self._cbhdl = simulator.register_value_change_callback(
+            self.signal._handle, self._react, type(self)._edge_type
+        )
         if self._cbhdl is None:
-            self._cbhdl = simulator.register_value_change_callback(
-                self.signal._handle, callback, type(self)._edge_type, self
-            )
-            if self._cbhdl is None:
-                raise RuntimeError(f"Unable set up {str(self)} Trigger")
-        super()._prime(callback)
+            raise RuntimeError(f"Unable set up {str(self)} Trigger")
+
+    def _pre_react(self) -> None:
+        cocotb.sim_phase = cocotb.SimPhase.NORMAL
 
     def __repr__(self) -> str:
         return f"{type(self).__qualname__}({self.signal!r})"
