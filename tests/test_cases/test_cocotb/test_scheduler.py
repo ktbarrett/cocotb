@@ -991,3 +991,18 @@ async def test_start_again_while_pending(_) -> None:
     b = cocotb.start_soon(a)
     assert b is a
     await a
+
+
+@cocotb.test
+async def test_task_started(_) -> None:
+    has_resumed = False
+
+    async def coro() -> None:
+        nonlocal has_resumed
+        has_resumed = True
+        await Timer(1, "ns")
+
+    a = cocotb.start_soon(coro())
+    assert not has_resumed
+    await a.started
+    assert has_resumed
