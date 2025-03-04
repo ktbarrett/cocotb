@@ -213,7 +213,7 @@ class Event:
         call :meth:`clear`.
         """
         if self._fired:
-            return NullTrigger(name=f"{str(self)}.wait()")
+            return EmptyTrigger()
         return _Event(self)
 
     def clear(self) -> None:
@@ -413,10 +413,39 @@ class Lock(AsyncContextManager[None]):
         self.release()
 
 
-class NullTrigger(Trigger):
+class EmptyTrigger(Trigger):
     """Fires immediately.
 
-    This is primarily for forcing the current Task to be rescheduled after all currently pending Tasks.
+    Mostly useful for building higher-order function which need to take Triggers.
+
+    .. versionadded:: 2.0
+    """
+
+    def __await__(self) -> Generator["Self", None, "Self"]:
+        yield from []  # Forces this to be a generator
+        return self
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__qualname__} at {pointer_str(self)}>"
+
+
+class Reschedule(Trigger):
+    """Fires after all current scheduled Tasks are resumed."""
+
+    def _prime(self, callback: Callable[[Trigger], None]) -> None:
+        if self._primed:
+            return
+        callback(self)
+        return super()._prime(callback)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__qualname__} at {pointer_str(self)}>"
+
+
+class NullTrigger(Reschedule):
+    """Fires "soon".
+
+    Consider using :class:`.EmptyTrigger` or :class:`Reschedule` instead.
 
     .. versionremoved:: 2.0
         The *outcome* parameter was removed. There is no alternative.
@@ -425,12 +454,6 @@ class NullTrigger(Trigger):
     def __init__(self, name: Optional[str] = None) -> None:
         super().__init__()
         self.name = name
-
-    def _prime(self, callback: Callable[[Trigger], None]) -> None:
-        if self._primed:
-            return
-        callback(self)
-        return super()._prime(callback)
 
     def __repr__(self) -> str:
         if self.name is None:
