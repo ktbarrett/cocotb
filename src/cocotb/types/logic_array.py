@@ -7,6 +7,7 @@ import warnings
 from math import ceil
 from typing import (
     TYPE_CHECKING,
+    ClassVar,
     Dict,
     Iterable,
     Iterator,
@@ -17,16 +18,20 @@ from typing import (
 )
 
 from cocotb._deprecation import deprecated
-from cocotb._utils import DocStrEnum
 from cocotb.types import ArrayLike
 from cocotb.types.logic import Logic, LogicConstructibleT, _str_literals
 from cocotb.types.range import Range
 
 if TYPE_CHECKING:
-    from typing import Literal
+    from typing import Literal, TypeAlias
 
 
-class ResolveX(DocStrEnum):
+ResolveXLiteral: "TypeAlias" = (
+    "Literal['error'] | Literal['zeros'] | Literal['ones'] | Literal['random']"
+)
+
+
+class ResolveX:
     """Resolution behaviors supported when converting a :class:`LogicArray` to an integer.
 
     The values ``L`` and ``H`` are always resolved to ``0`` and ``1`` respectively.
@@ -34,19 +39,28 @@ class ResolveX(DocStrEnum):
     to either ``0`` or ``1``.
     """
 
-    VALUE_ERROR = (
-        "error",
-        "Throws a :exc:`ValueError` if the :class:`LogicArray` contains non-``0``/``1`` values.",
-    )
-    ZEROS = ("zeros", "Resolves all non-``0``/``1`` values to ``0``.")
-    ONES = ("ones", "Resolves all non-``0``/``1`` values to ``1``.")
-    RANDOM = (
-        "random",
-        "Resolves all non-``0``/``1`` values randomly to either ``0`` or ``1``.",
-    )
+    VALUE_ERROR: ClassVar[ResolveXLiteral] = "error"
+    """Throws a :exc:`ValueError` if the :class:`LogicArray` contains non-``0``/``1`` values."""
+
+    ZEROS: ClassVar[ResolveXLiteral] = "zeros"
+    """Resolves all non-``0``/``1`` values to ``0``."""
+
+    ONES: ClassVar[ResolveXLiteral] = "ones"
+    """Resolves all non-``0``/``1`` values to ``1``."""
+
+    RANDOM: ClassVar[ResolveXLiteral] = "random"
+    """Resolves all non-``0``/``1`` values randomly to either ``0`` or ``1``."""
 
 
-RESOLVE_X = ResolveX[os.getenv("COCOTB_RESOLVE_X", "VALUE_ERROR")]
+def _setup_resolve_x() -> ResolveXLiteral:
+    res = os.getenv("COCOTB_RESOLVE_X", "VALUE_ERROR")
+    try:
+        return cast(ResolveXLiteral, getattr(ResolveX, res))
+    except AttributeError:
+        raise ValueError(f"Invalid value for COCOTB_RESOLVE_X: {res!r}.")
+
+
+RESOLVE_X = _setup_resolve_x()
 """Global default for resolving ``X``, ``Z``, ``U``, ``W``, and ``-`` values to ``0`` or ``1``.
 
 Set using :envvar:`COCOTB_RESOLVE_X` before boot, or via this variable any time thereafter.
@@ -320,7 +334,7 @@ class LogicArray(ArrayLike[Logic]):
 
     def _get_int(
         self,
-        resolve: "ResolveX | Literal['error'] | Literal['zeros'] | Literal['ones'] | Literal['random'] | None",
+        resolve: "ResolveXLiteral | None",
     ) -> int:
         if self._value_as_int is None:
             # May convert list to str before converting to int.
@@ -590,7 +604,7 @@ class LogicArray(ArrayLike[Logic]):
 
     def to_unsigned(
         self,
-        resolve: "ResolveX | Literal['error'] | Literal['zeros'] | Literal['ones'] | Literal['random'] | None" = None,
+        resolve: "ResolveXLiteral | None" = None,
     ) -> int:
         """Convert the value to an integer by interpreting it using unsigned representation.
 
@@ -614,7 +628,7 @@ class LogicArray(ArrayLike[Logic]):
 
     def to_signed(
         self,
-        resolve: "ResolveX | Literal['error'] | Literal['zeros'] | Literal['ones'] | Literal['random'] | None" = None,
+        resolve: "ResolveXLiteral | None" = None,
     ) -> int:
         """Convert the value to an integer by interpreting it using two's complement representation.
 
