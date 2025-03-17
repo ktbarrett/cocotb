@@ -151,21 +151,30 @@ Cocotb
     Defines how to resolve bits with a value of ``X``, ``Z``, ``U``, ``W``, or ``-`` when being converted to integer.
     Valid settings are:
 
-    ``VALUE_ERROR``
-       Raise a :exc:`ValueError` exception.
-    ``ZEROS``
-       Resolve to ``0``.
-    ``ONES``
-       Resolve to ``1``.
-    ``RANDOM``
-       Randomly resolve to a ``0`` or a ``1``.
+    ``error``
+        See :data:`.ResolveX.ERROR`.
+    ``zeros``
+        See :data:`.ResolveX.ZEROS`.
+    ``ones``
+        See :data:`.ResolveX.ONES`.
+    ``random``
+        See :data:`.ResolveX.RANDOM`.
 
-    Set to ``VALUE_ERROR`` by default.
+    Set to ``error`` by default.
 
     .. warning::
 
         This exists for backwards-compatability reasons.
-        Using any value besides ``VALUE_ERROR`` is *not* recommended.
+        Setting this option is *not* recommended.
+
+    .. versionchanged:: 2.0
+
+        Values are now case-insensitive.
+
+    .. deprecated:: 2.0
+
+        ``VALUE_ERROR`` is now ``error``.
+
 
 .. envvar:: LIBPYTHON_LOC
 

@@ -39,7 +39,7 @@ class ResolveX:
     to either ``0`` or ``1``.
     """
 
-    VALUE_ERROR: ClassVar[ResolveXLiteral] = "error"
+    ERROR: ClassVar[ResolveXLiteral] = "error"
     """Throws a :exc:`ValueError` if the :class:`LogicArray` contains non-``0``/``1`` values."""
 
     ZEROS: ClassVar[ResolveXLiteral] = "zeros"
@@ -53,23 +53,28 @@ class ResolveX:
 
 
 def _setup_resolve_x() -> ResolveXLiteral:
-    res = os.getenv("COCOTB_RESOLVE_X", "VALUE_ERROR")
-    try:
-        return cast(ResolveXLiteral, getattr(ResolveX, res))
-    except AttributeError:
+    res = os.getenv("COCOTB_RESOLVE_X", "error").lower()
+    if res == "value_error":
+        warnings.warn(
+            "The 'VALUE_ERROR' option for COCOTB_RESOLVE_X is deprecated. Use 'error' instead.",
+            DeprecationWarning,
+        )
+        res = "error"
+    if res not in ("error", "zeros", "ones", "random"):
         raise ValueError(f"Invalid value for COCOTB_RESOLVE_X: {res!r}.")
+    return cast(ResolveXLiteral, res)
 
 
 RESOLVE_X = _setup_resolve_x()
 """Global default for resolving ``X``, ``Z``, ``U``, ``W``, and ``-`` values to ``0`` or ``1``.
 
 Set using :envvar:`COCOTB_RESOLVE_X` before boot, or via this variable any time thereafter.
-Defaults to :attr:`~ResolveX.VALUE_ERROR`.
+Defaults to :attr:`~ResolveX.ERROR`.
 
 .. warning::
 
     This exists for backwards-compatibility reasons.
-    Using any value besides ``VALUE_ERROR`` is *not* recommended.
+    Setting this variable is *not* recommended.
 """
 
 
