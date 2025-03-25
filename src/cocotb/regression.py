@@ -146,13 +146,14 @@ class RegressionManager:
         for module_name in modules:
             mod = import_module(module_name)
 
-            if not hasattr(mod, "__cocotb_tests__"):
-                raise RuntimeError(
-                    f"No tests were discovered in module: {module_name!r}"
-                )
+            test_found = False
+            for thing in vars(mod).values():
+                if isinstance(thing, Test):
+                    self.register_test(thing)
+                    test_found = True
 
-            for test in mod.__cocotb_tests__:
-                self.register_test(test)
+            if not test_found:
+                self.log.warning("No tests found in module %s", module_name)
 
         # error if no tests were discovered
         if not self._test_queue:
@@ -1041,9 +1042,6 @@ class TestFactory(Generic[F]):
         # trust the user puts a reasonable stacklevel in
         glbs = cast(FrameType, inspect.stack()[stacklevel][0].f_back).f_globals
 
-        if "__cocotb_tests__" not in glbs:
-            glbs["__cocotb_tests__"] = []
-
         test_func_name = self.test_function.__qualname__ if name is None else name
 
         for index, testoptions in enumerate(
@@ -1109,5 +1107,4 @@ class TestFactory(Generic[F]):
                 _expect_sim_failure=_expect_sim_failure,
             )
 
-            glbs["__cocotb_tests__"].append(test)
-            glbs[test.name] = test
+            glbs[name] = test
