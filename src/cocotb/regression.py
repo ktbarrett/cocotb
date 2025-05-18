@@ -18,15 +18,18 @@ from typing import (
     Any,
     Dict,
     List,
+    Optional,
     Union,
+    cast,
 )
 
 import cocotb
 import cocotb._gpi_triggers
 import cocotb.handle
 from cocotb import _ANSI, simulator
-from cocotb._outcomes import Error
-from cocotb._test import Failed, SimFailure, Test
+from cocotb._gpi_triggers import GPITrigger
+from cocotb._outcomes import Error, Outcome
+from cocotb._test import Failed, Test
 from cocotb._test_factory import TestFactory
 from cocotb._utils import (
     DocEnum,
@@ -40,11 +43,16 @@ from cocotb.utils import get_sim_time
 __all__ = (
     "RegressionManager",
     "RegressionMode",
+    "SimFailure",
     "Test",
     "TestFactory",
 )
 
 _pdb_on_exception = "COCOTB_PDB_ON_EXCEPTION" in os.environ
+
+
+class SimFailure(BaseException):
+    """A Test failure due to simulator failure."""
 
 
 _logger = logging.getLogger(__name__)
@@ -94,6 +102,8 @@ class RegressionManager:
 
     def __init__(self) -> None:
         self._test: Test
+        self._start_time: float
+        self._start_sim_time: float
         self.log = _logger
         self._regression_start_time: float
         self._test_results: List[Dict[str, Any]] = []
@@ -112,7 +122,7 @@ class RegressionManager:
         self._filters: List[re.Pattern[str]] = []
         self._mode = RegressionMode.REGRESSION
         self._included: List[bool]
-        self._sim_failure: Union[SimFailure, None] = None
+        self._sim_failure: Union[Error[None], None] = None
 
         # Setup XUnit
         ###################
@@ -275,7 +285,11 @@ class RegressionManager:
 
             # if the test should be run, but the simulator has failed, record and continue
             if self._sim_failure is not None:
-                self._record_sim_failure()
+                self._score_test(
+                    self._sim_failure,
+                    0,
+                    0,
+                )
                 continue
 
             # initialize the test, if it fails, record and continue
@@ -289,17 +303,20 @@ class RegressionManager:
 
             if self._first_test:
                 self._first_test = False
-                return self._test.start()
+                return self._start_next_test()
             else:
-                return self._timer1._prime(self._schedule_next_test)
+                return self._timer1._prime(self._start_next_test)
 
         return self._tear_down()
 
-    def _schedule_next_test(self, trigger: cocotb._gpi_triggers.GPITrigger) -> None:
-        # TODO move to Trigger object
-        cocotb._gpi_triggers._current_gpi_trigger = trigger
-        trigger._cleanup()
+    def _start_next_test(self, trigger: Optional[GPITrigger] = None) -> None:
+        if trigger is not None:
+            # TODO move to Trigger object
+            cocotb._gpi_triggers._current_gpi_trigger = trigger
+            trigger._cleanup()
 
+        self._start_sim_time = get_sim_time("ns")
+        self._start_time = time.time()
         self._test.start()
 
     def _tear_down(self) -> None:
@@ -336,11 +353,21 @@ class RegressionManager:
         Due to the way that simulation failure is handled,
         this function must be able to detect simulation failure and finalize the regression.
         """
+        wall_time_s = time.time() - self._start_time
+        sim_time_ns = get_sim_time("ns") - self._start_sim_time
+        self._score_test(
+            cast(Outcome[Any], self._test._outcome),
+            wall_time_s,
+            sim_time_ns,
+        )
 
-        # compute test completion time
+    def _score_test(
+        self,
+        outcome: Outcome[Any],
+        wall_time_s: float,
+        sim_time_ns: float,
+    ) -> None:
         test = self._test
-        wall_time_s = test.wall_time
-        sim_time_ns = test.sim_time_ns
 
         # score test
         passed: bool
@@ -351,7 +378,7 @@ class RegressionManager:
             outcome.get()
         except BaseException as e:
             passed, msg = False, None
-            exc = remove_traceback_frames(e, ["_test_complete", "get"])
+            exc = remove_traceback_frames(e, ["_score_test", "get"])
         else:
             passed, msg, exc = True, None, None
 
@@ -662,22 +689,6 @@ class RegressionManager:
             }
         )
 
-    def _record_sim_failure(self) -> None:
-        if self._test._expect_sim_failure:
-            self._record_test_passed(
-                wall_time_s=0,
-                sim_time_ns=0,
-                result=None,
-                msg=f"simulator failed as expected with: {self._sim_failure!s}",
-            )
-        else:
-            self._record_test_failed(
-                wall_time_s=0,
-                sim_time_ns=0,
-                result=self._sim_failure,
-                msg=None,
-            )
-
     def _log_test_summary(self) -> None:
         """Called by :meth:`_tear_down` to log the test summary."""
         real_time = time.time() - self._regression_start_time
@@ -803,8 +814,8 @@ class RegressionManager:
         self.log.info(summary)
 
     def _fail_simulation(self, msg: str) -> None:
-        self._sim_failure = SimFailure(msg)
-        self._test.abort(Error(self._sim_failure))
+        self._sim_failure = Error(SimFailure(msg))
+        self._test.abort(self._sim_failure)
         cocotb._scheduler_inst._event_loop()
 
     @staticmethod

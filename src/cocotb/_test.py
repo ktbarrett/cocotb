@@ -2,7 +2,6 @@ import functools
 import hashlib
 import inspect
 import random
-import time
 from typing import (
     Any,
     Callable,
@@ -23,7 +22,6 @@ from cocotb._outcomes import Error, Outcome, Value
 from cocotb._typing import TimeUnit
 from cocotb.task import ResultType, Task
 from cocotb.triggers import NullTrigger, SimTimeoutError, with_timeout
-from cocotb.utils import get_sim_time
 
 Failed: Type[BaseException]
 try:
@@ -38,12 +36,6 @@ else:
         Failed = type(_raises_e)
     else:
         assert False, "pytest.raises doesn't raise an exception when it fails"
-
-
-# TODO remove SimFailure once we have functionality in place to abort the test without
-# having to set an exception.
-class SimFailure(BaseException):
-    """A Test failure due to simulator failure."""
 
 
 class TestSuccess(BaseException):
@@ -112,7 +104,6 @@ class Test:
         expect_error: Union[Type[BaseException], Tuple[Type[BaseException], ...]] = (),
         skip: bool = False,
         stage: int = 0,
-        _expect_sim_failure: bool = False,
     ) -> None:
         self.func: Callable[..., Coroutine[Trigger, None, None]]
         if timeout_time is not None:
@@ -136,10 +127,7 @@ class Test:
         self.expect_fail = expect_fail
         if isinstance(expect_error, type):
             expect_error = (expect_error,)
-        if _expect_sim_failure:
-            expect_error += (SimFailure,)
         self.expect_error = expect_error
-        self._expect_sim_failure = _expect_sim_failure
         self.skip = skip
         self.stage = stage
         self.name = self.func.__qualname__ if name is None else name
@@ -156,9 +144,6 @@ class Test:
         self._main_task: Task[None]
         self._outcome: Union[None, Outcome[Any]] = None
         self._shutdown_errors: list[Outcome[Any]] = []
-        self._started: bool = False
-        self._start_time: float
-        self._start_sim_time: float
 
     def init(self, _test_complete_cb: Callable[[], None]) -> None:
         self._test_complete_cb = _test_complete_cb
@@ -191,11 +176,6 @@ class Test:
         seed = cocotb.RANDOM_SEED + int(hasher.hexdigest(), 16)
         random.seed(seed)
 
-        self._start_sim_time = get_sim_time("ns")
-        self._start_time = time.time()
-
-        self._started = True
-
         cocotb._scheduler_inst._schedule_task_internal(self._main_task)
         cocotb._scheduler_inst._event_loop()
 
@@ -221,12 +201,6 @@ class Test:
         for task in self.tasks[:]:
             task._cancel_now()
 
-        if self._started:
-            self.wall_time = time.time() - self._start_time
-            self.sim_time_ns = get_sim_time("ns") - self._start_sim_time
-        else:
-            self.wall_time = 0
-            self.sim_time_ns = 0
         self._test_complete_cb()
 
     def add_task(self, task: Task[Any]) -> None:
