@@ -150,6 +150,6 @@ Rationale
 These existed to support defining coroutines in Python 2 and early versions of Python 3 before :term:`coroutine functions <coroutine function>`
 using the :keyword:`!async`\ /:keyword:`!await` syntax was added in Python 3.5.
 We no longer support versions of Python that don't support :keyword:`!async`\ /:keyword:`!await`,
-Python coroutines are noticeably faster than :deco:`cocotb.coroutine`'s implementation,
-and the behavior of :deco:`cocotb.coroutine` would have to be changed to support changes to the scheduler.
-For all those reasons the :deco:`cocotb.coroutine` decorator and generator-based coroutine support was removed.
+Python coroutines are noticeably faster than :deco:`!cocotb.coroutine`'s implementation,
+and the behavior of :deco:`!cocotb.coroutine` would have to be changed to support changes to the scheduler.
+For all those reasons the :deco:`!cocotb.coroutine` decorator and generator-based coroutine support was removed.
