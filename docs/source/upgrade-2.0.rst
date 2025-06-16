@@ -39,8 +39,8 @@ preventing scheduler re-entrancy and sidestepping an entire class of bugs and ru
 `The cocotb blog post on this change <https://fossi-foundation.org/blog/2021-10-20-cocotb-1-6-0>`_
 is very illustrative of how :func:`!cocotb.start_soon` and :func:`!cocotb.fork` are different.
 
-Caveats
-=======
+Additional Details
+==================
 
 Coroutines run immediately
 --------------------------
@@ -167,17 +167,80 @@ How to Upgrade
 ==============
 
 * Change all constructions of :class:`!BinaryValue` to :class:`!LogicArray`.
-* Remove passing of :class:`!BinaryRepresentation` to the constructor and setting of the :attr:`!BinaryValue.binaryRepresentation` attribute.
-    * Replace construction from :class:`int` with :meth:`.LogicArray.from_unsigned` or :meth:`.LogicArray.from_signed`.
-    * Replace all conversion from :class:`!LogicArray` to :class:`!int` with :meth:`.LogicArray.to_unsigned` or :class:`.LogicArray.to_signed`.
-* Remove passing ``bigEndian`` argument to the constructor and setting of the :attr:`!BinaryValue.big_endian` attribute.
-    * Replace construction from :class:`bytes` with :meth:`LogicArray.from_bytes` and pass the appropriate ``byteorder`` argument.
-    * Replace conversion to :class:`!bytes` with :meth:`LogicArray.to_bytes` and pass the appropriate ``byteorder`` argument.
+* Replace construction from :class:`int` with :meth:`.LogicArray.from_unsigned` or :meth:`.LogicArray.from_signed`.
+* Replace construction from :class:`bytes` with :meth:`LogicArray.from_bytes` and pass the appropriate ``byteorder`` argument.
+
+.. code-block:: python
+
+    # Old way with BinaryValue
+    BinaryValue(10, 10)
+    BinaryValue("1010", n_bits=4)
+    BinaryValue(-10, 8, binaryRepresentation=BinaryRepresentation.SIGNED)
+    BinaryValue(b"1234", bigEndian=True)
+
+    # New way with LogicArray
+    LogicArray.from_unsigned(10, 10)
+    LogicArray("1010")
+    LogicArray.from_signed(-10, 8)
+    BinaryValue.from_bytes(b"1234", byteorder="big")
+
+* Replace usage of :external+cocotb19:py:meth:`.BinaryValue.integer` and :external+cocotb19:py:meth:`.BinaryValue.signed_integer`
+  with :meth:`.LogicArray.to_unsigned` or :class:`.LogicArray.to_signed`, respectively.
+* Replace usage of :external+cocotb19:py:meth:`.BinaryValue.binstr` with the :class:`str` cast (this works in 1.9 as well).
+* Replace conversion to :class:`!bytes` with :meth:`LogicArray.to_bytes` and pass the appropriate ``byteorder`` argument.
+
+.. code-block:: python
+
+    # Old way with BinaryValue
+    b = BinaryValue(10, 4)
+    assert b.integer == 10
+    assert b.signed_integer == -6
+    assert b.binstr == "1010"
+    assert b.buff == b"\x0a"
+
+    # New way with LogicArray
+    b = LogicArray(10, 4)
+    assert b.to_unsigned() == 10
+    assert b.to_signed() == -6
+    assert str(b) == "1010"
+    assert b.to_bytes(byteorder="big") == b"\x0a"
+
+
+* Remove setting of the :attr:`!BinaryValue.binaryRepresentation` attribute.
+
+.. code-block:: python
+
+    # Old way with BinaryValue
+    b = BinaryValue(b"12", bigEndian=True)
+    assert b.buff == b"12"
+    b.big_endian = False
+    assert b.buff == b"21"
+
+    # New way with LogicArray
+    b = LogicArray.from_bytes(b"12", byteorder="big")
+    assert b.to_bytes(byteorder="big") == b"12"
+    assert b.to_bytes(byteorder="little") == b"21"
+
+* Remove setting of the :attr:`!BinaryValue.big_endian` attribute.
+
+.. code-block:: python
+
+    # TODO
+
+
 * Convert all objects to :class:`!int` as described above before doing any arithmetic operation, such as ``+``, ``-``, ``/``, ``//``, ``%``, ``**``, ``- (unary)``, ``+ (unary)``, ``abs(value)``, ``>>``, ``<<``.
+
 * Change bit indexing and slicing to use the indexing provided by the ``range`` argument to the constructor.
     * Passing an :class:`!int` as the ``range`` argument will default the range to :class:`Range(range-1, "downto", 0) <cocotb.types.Range>`.
       This means index ``0`` will be the rightmost bit and not the leftmost bit like in :class:`BinaryValue`.
       Pass ``Range(0, range-1)`` when constructing :class:`!LogicArray` to retain the old indexing scheme, or update the indexing and slicing usage.
+
+* Change all uses of the :attr:`.LogicArray.binstr`, :attr:`.LogicArray.integer`, :attr:`.LogicArray.signed_integer`, and :attr:`.LogicArray.buff` setters,
+  as well as the :external+cocotb19:py:meth:`.BinaryValue.assign` to use :class:`!LogicArray`'s setitem syntax.
+
+.. code-block:: python
+
+
 
 Rationale
 =========
@@ -194,5 +257,10 @@ It was difficult to use correctly and easy to use incorrectly, which are the hal
 Unfortunately, a gradual change is not really possible with such core functionality,
 so it had to be outright replaced in one step.
 
-Caveats
-=======
+Additional Details
+==================
+
+:meth:`!BinaryValue.assign` and Setters
+---------------------------------------
+
+Using the setters for :attr:`.LogicArray.binstr`, :attr:`.LogicArray.integer`, :attr:`.LogicArray.signed_integer`, and :attr:`.LogicArray.buff`
