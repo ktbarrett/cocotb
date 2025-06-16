@@ -153,3 +153,46 @@ We no longer support versions of Python that don't support :keyword:`!async`\ /:
 Python coroutines are noticeably faster than :deco:`!cocotb.coroutine`'s implementation,
 and the behavior of :deco:`!cocotb.coroutine` would have to be changed to support changes to the scheduler.
 For all those reasons the :deco:`!cocotb.coroutine` decorator and generator-based coroutine support was removed.
+
+********************************************************
+:class:`!BinaryValue` replaced with :class:`!LogicArray`
+********************************************************
+
+Change
+======
+
+:external+cocotb19:py:class:`.BinaryValue` and :external+cocotb19:py:class:`.BinaryRepresentation` were removed and replaced with the existing :class:`.Logic` and :class:`.LogicArray`.
+
+How to Upgrade
+==============
+
+* Change all constructions of :class:`!BinaryValue` to :class:`!LogicArray`.
+* Remove passing of :class:`!BinaryRepresentation` to the constructor and setting of the :attr:`!BinaryValue.binaryRepresentation` attribute.
+    * Replace construction from :class:`int` with :meth:`.LogicArray.from_unsigned` or :meth:`.LogicArray.from_signed`.
+    * Replace all conversion from :class:`!LogicArray` to :class:`!int` with :meth:`.LogicArray.to_unsigned` or :class:`.LogicArray.to_signed`.
+* Remove passing ``bigEndian`` argument to the constructor and setting of the :attr:`!BinaryValue.big_endian` attribute.
+    * Replace construction from :class:`bytes` with :meth:`LogicArray.from_bytes` and pass the appropriate ``byteorder`` argument.
+    * Replace conversion to :class:`!bytes` with :meth:`LogicArray.to_bytes` and pass the appropriate ``byteorder`` argument.
+* Convert all objects to :class:`!int` as described above before doing any arithmetic operation, such as ``+``, ``-``, ``/``, ``//``, ``%``, ``**``, ``- (unary)``, ``+ (unary)``, ``abs(value)``, ``>>``, ``<<``.
+* Change bit indexing and slicing to use the indexing provided by the ``range`` argument to the constructor.
+    * Passing an :class:`!int` as the ``range`` argument will default the range to :class:`Range(range-1, "downto", 0) <cocotb.types.Range>`.
+      This means index ``0`` will be the rightmost bit and not the leftmost bit like in :class:`BinaryValue`.
+      Pass ``Range(0, range-1)`` when constructing :class:`!LogicArray` to retain the old indexing scheme, or update the indexing and slicing usage.
+
+Rationale
+=========
+
+The :external+cocotb19:py:class:`.BinaryValue` class had some issues fundamental to it's design.
+One was the fact many method's behavior was dependent upon mutable state,
+which makes operating on these values with higher-order functions difficult or tedious.
+Data types should *not* be stateful as much as possible.
+Second was the confusing conflation of bit and byte endianness.
+Third was the inconsistent reporting of warnings or errors.
+Fourth was that these things combined to yield "correct", but unexpected results in some cases.
+It was difficult to use correctly and easy to use incorrectly, which are the hallmarks of a bad API.
+
+Unfortunately, a gradual change is not really possible with such core functionality,
+so it had to be outright replaced in one step.
+
+Caveats
+=======
