@@ -186,7 +186,7 @@ How to Upgrade
 
 * Replace usage of :external+cocotb19:py:meth:`.BinaryValue.integer` and :external+cocotb19:py:meth:`.BinaryValue.signed_integer`
   with :meth:`.LogicArray.to_unsigned` or :class:`.LogicArray.to_signed`, respectively.
-* Replace usage of :external+cocotb19:py:meth:`.BinaryValue.binstr` with the :class:`str` cast (this works in 1.9 as well).
+* Replace usage of :external+cocotb19:py:meth:`.BinaryValue.binstr` with the :class:`str` cast (this works with :class:`!BinaryValue` as well).
 * Replace conversion to :class:`!bytes` with :meth:`LogicArray.to_bytes` and pass the appropriate ``byteorder`` argument.
 
 .. code-block:: python
@@ -205,8 +205,7 @@ How to Upgrade
     assert str(b) == "1010"
     assert b.to_bytes(byteorder="big") == b"\x0a"
 
-
-* Remove setting of the :attr:`!BinaryValue.binaryRepresentation` attribute.
+* Remove setting of the :attr:`!BinaryValue.big_endian` attribute to change endianness.
 
 .. code-block:: python
 
@@ -221,22 +220,73 @@ How to Upgrade
     assert b.to_bytes(byteorder="big") == b"12"
     assert b.to_bytes(byteorder="little") == b"21"
 
-* Remove setting of the :attr:`!BinaryValue.big_endian` attribute.
+* Convert all objects to an unsigned :class:`!int` before doing any arithmetic operation, such as ``+``, ``-``, ``/``, ``//``, ``%``, ``**``, ``- (unary)``, ``+ (unary)``, ``abs(value)``, ``>>``, ``<<``.
 
 .. code-block:: python
 
-    # TODO
+    # Old way with BinaryValue
+    b = BinaryValue(12, 8)
+    assert 8 * b == 96
+    assert b << 2 == 48
+    assert b / 6 == 2.0
+    assert -b == -12
+    # inplace modification
+    b *= 3
+    assert b == 36
 
+    # New way with LogicArray
+    b = LogicArray(12, 8)
+    b_int = b.to_unsigned()
+    assert 8 * b_int == 96
+    assert b_int << 2 == 48
+    assert b_int / 6 == 2.0
+    assert -b_int == -12
+    # inplace modification
+    b[:] = b_int * 3
+    assert b == 36
 
-* Convert all objects to :class:`!int` as described above before doing any arithmetic operation, such as ``+``, ``-``, ``/``, ``//``, ``%``, ``**``, ``- (unary)``, ``+ (unary)``, ``abs(value)``, ``>>``, ``<<``.
 
 * Change bit indexing and slicing to use the indexing provided by the ``range`` argument to the constructor.
     * Passing an :class:`!int` as the ``range`` argument will default the range to :class:`Range(range-1, "downto", 0) <cocotb.types.Range>`.
       This means index ``0`` will be the rightmost bit and not the leftmost bit like in :class:`BinaryValue`.
       Pass ``Range(0, range-1)`` when constructing :class:`!LogicArray` to retain the old indexing scheme, or update the indexing and slicing usage.
+    * Change all negative indexing to use positive indexing
+
+.. code-block:: python
+
+    # Old way with BinaryValue
+    val = BinaryValue(10, 4)
+    assert val[0] == 1
+    assert val[3] == 0
+    assert val[-2] == 1
+
+    # New way with LogicArray, specifying an ascending range
+    val = LogicArray(10, Range(0, 3))
+    assert val[0] == 1
+    assert val[3] == 0
+    assert val[3] == 1
+
+    # New way with LogicArray, changing indexing
+    val = LogicArray(10, 4)
+    assert val[3] == 1
+    assert val[0] == 0
+    assert val[1] == 1
+
+
+.. note::
+    You can also use the :attr:`.LogicArray.range` object to translate ``0`` to ``len()-1`` indexing to the one used by :class:`!LogicArray`,
+    but this is rather inefficient.
+
+    .. code-block:: python
+
+        val = LogicArray("1010", Range(3, 0))
+        assert val[0] == 0  # index 0 is right-most
+        ind = val.range[0]  # 0th range value is 3
+        assert val[ind] == "1"  # index 3 is left-most
+
 
 * Change all uses of the :attr:`.LogicArray.binstr`, :attr:`.LogicArray.integer`, :attr:`.LogicArray.signed_integer`, and :attr:`.LogicArray.buff` setters,
-  as well as the :external+cocotb19:py:meth:`.BinaryValue.assign` to use :class:`!LogicArray`'s setitem syntax.
+  as well as calls to :external+cocotb19:py:meth:`.BinaryValue.assign`, to use :class:`!LogicArray`'s setitem syntax.
 
 .. code-block:: python
 
@@ -245,22 +295,24 @@ How to Upgrade
 Rationale
 =========
 
-The :external+cocotb19:py:class:`.BinaryValue` class had some issues fundamental to it's design.
-One was the fact many method's behavior was dependent upon mutable state,
-which makes operating on these values with higher-order functions difficult or tedious.
-Data types should *not* be stateful as much as possible.
-Second was the confusing conflation of bit and byte endianness.
-Third was the inconsistent reporting of warnings or errors.
-Fourth was that these things combined to yield "correct", but unexpected results in some cases.
-It was difficult to use correctly and easy to use incorrectly, which are the hallmarks of a bad API.
-
+In many cases :external+cocotb19:py:class:`.BinaryValue` would behave in unexpected ways that were often reported as errors.
+These unexpected behaviors were either an unfortunately product of its design or done purposefully.
+They could not necessarily be "fixed" and any fix would invariably break the API.
+So rather than attempt to fix it, it was outright replaced.
 Unfortunately, a gradual change is not really possible with such core functionality,
 so it had to be outright replaced in one step.
 
 Additional Details
 ==================
 
-:meth:`!BinaryValue.assign` and Setters
----------------------------------------
-
 Using the setters for :attr:`.LogicArray.binstr`, :attr:`.LogicArray.integer`, :attr:`.LogicArray.signed_integer`, and :attr:`.LogicArray.buff`
+
+* partial setting with binstr and how it worked with big_endian
+* truncation with warnings
+* but no warning if the value was the same
+* integer setter would allow signed values if set to BinaryRepresentation.TWOS_COMPLEMENT
+* changing binaryRepresentation did not actually change that
+* not setting n_bits in constructor allowed the BinaryValue to take on any possible sized value
+* otherwise it truncated implicitly on all setting operations
+* indexing without setting n_bits was broken
+* negative indexing
