@@ -202,6 +202,12 @@ class Task(Generic[ResultType]):
         cocotb._scheduler_inst._react(self.complete)
         cocotb._scheduler_inst._react(self._join)
 
+    def _schedule_resume(self, exc: Union[BaseException, None] = None) -> None:
+        # Unprime pending Trigger or unschedule if scheduled.
+        cocotb._scheduler_inst._unschedule(self)
+        # Reschedule with given outcome.
+        cocotb._scheduler_inst._schedule_task_internal(self, exc)
+
     def _advance(self, exc: Union[BaseException, None]) -> Union[Trigger, None]:
         """Resume execution of the Task.
 
@@ -347,16 +353,12 @@ class Task(Generic[ResultType]):
         Returns: ``True`` if the Task was cancelled; ``False`` otherwise.
         """
         if self._state is _TaskState.PENDING:
-            # Unprime trigger if pending
-            cocotb._scheduler_inst._unschedule(self)
-            # Schedule wakeup to throw CancelledError
-            cocotb._scheduler_inst._schedule_task_internal(self)
+            self._schedule_resume()
         elif self._state is _TaskState.SCHEDULED:
             # Already scheduled, so we just hijack it to throw CancelledError
             pass
         elif self._state in (_TaskState.UNSTARTED, _TaskState.RUNNING):
-            # (Re)schedule to throw CancelledError
-            cocotb._scheduler_inst._schedule_task_internal(self)
+            self._schedule_resume()
         else:
             # Already finished or cancelled
             return False
