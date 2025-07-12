@@ -2,15 +2,16 @@
 # Licensed under the Revised BSD License, see LICENSE for details.
 # SPDX-License-Identifier: BSD-3-Clause
 from abc import abstractmethod
-from typing import Generic, Iterable, Iterator, Optional, TypeVar, Union, overload
+from typing import Iterable, Iterator, Optional, TypeVar, Union, overload
 
+from cocotb._py_compat import Protocol
 from cocotb.types._range import Range
 
 T_co = TypeVar("T_co", covariant=True)
 T = TypeVar("T")
 
 
-class AbstractArray(Generic[T_co]):
+class AbstractArray(Protocol[T_co]):
     r"""Abstract base class for non-mutating Array-like collections.
 
     Arrays are similar to :class:`~collections.abc.Sequence`\ s,
