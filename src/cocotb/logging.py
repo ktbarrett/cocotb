@@ -38,6 +38,13 @@ logging.addLevelName(5, "TRACE")
 
 _reduced_fmt_env = os.environ.get("COCOTB_REDUCED_LOG_FMT")
 if _reduced_fmt_env is not None:
+<<<<<<< Updated upstream
+=======
+    # warnings.warn(
+    #     "`COCOTB_REDUCED_LOG_FMT` is deprecated. Use COCOTB_LOG_CONFIG instead.",
+    #     DeprecationWarning,
+    # )
+>>>>>>> Stashed changes
     _reduced_fmt = bool(int(_reduced_fmt_env))
 else:
     _reduced_fmt = False
@@ -190,69 +197,26 @@ class SimLogFormatter:
         logging.CRITICAL: _ANSI.COLOR_CRITICAL,
     }
 
-    time_converter = time.localtime
-
-    class _SimTimeConverter(dict):
-        def __init__(self, steps: int) -> None:
-            self._steps = steps
-
-        def __getitem__(self, key: str) -> float:
-            if key == "step":
-                return self._steps
-            else:
-                return get_time_from_sim_steps(self._steps, cast("TimeUnit", key))
-
-    default_prefix = "{sim_time:>11} {levelname:<8} {name[-34:]:<34} " + (
-        ""
-        if _reduced_fmt
-        else "{filename[-20:]:>20}:{lineno:4} in {funcName[-31:]:31} "
+    default_prefix = (
+        "{get_time_from_sim_steps(created_sim_time, 'ns') if created_sim_time else '-.--':>9}ns {levelname:<8} {name[-34:]:<34} "
+        + (
+            ""
+            if _reduced_fmt
+            else "{filename[-20:]:>20}:{lineno:4} in {funcName[-31:]:31} {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created))}"
+        )
     )
-    default_datefmt = "%Y-%m-%d %H:%M:%S"
-    default_sim_time_fmt = "{ns:.2f}ns"
-    default_empty_sim_time_fmt = "-.--ns"
 
     def __init__(
         self,
         *,
         prefix_fmt: Optional[str] = None,
-        date_fmt: Optional[str] = None,
-        sim_time_fmt: Optional[str] = None,
-        empty_sim_time_fmt: Optional[str] = None,
         color: bool = False,
     ) -> None:
         self.prefix_fmt = prefix_fmt if prefix_fmt is not None else self.default_prefix
-        self.date_fmt = date_fmt if date_fmt is not None else self.default_datefmt
-        self.sim_time_fmt = (
-            sim_time_fmt if sim_time_fmt is not None else self.default_sim_time_fmt
-        )
-        self.empty_sim_time_fmt = (
-            empty_sim_time_fmt
-            if empty_sim_time_fmt is not None
-            else self.default_empty_sim_time_fmt
-        )
         self.color = color
 
-    def _format_time(self, record: logging.LogRecord) -> str:
-        ct = type(self).time_converter(record.created)
-        return time.strftime(self.date_fmt, ct)
-
-    def _format_sim_time(self, record: logging.LogRecord) -> str:
-        sim_time = cast("int | None", getattr(record, "created_sim_time", None))
-        if sim_time is None:
-            return _vfstrfmt(self.empty_sim_time_fmt, {})
-        else:
-            return _vfstrfmt(self.sim_time_fmt, type(self)._SimTimeConverter(sim_time))
-
-    @cached_property
-    def _uses_time(self) -> bool:
-        return "asctime" in self.prefix_fmt
-
-    @cached_property
-    def _uses_sim_time(self) -> bool:
-        return "sim_time" in self.prefix_fmt
-
     def _format_message(self, record: logging.LogRecord) -> str:
-        prefix = _vfstrfmt(self.prefix_fmt, vars(record))
+        prefix = _vfstrfmt(self.prefix_fmt, record.__dict__ | locals() | globals())
 
         # add padding to each line of message
         msg_lines = record.getMessage().split("\n")
@@ -281,12 +245,6 @@ class SimLogFormatter:
         return stack_info
 
     def format(self, record: logging.LogRecord) -> str:
-        if self._uses_sim_time:
-            record.sim_time = self._format_sim_time(record)
-
-        if self._uses_time:
-            record.asctime = self._format_time(record)
-
         s = self._format_message(record)
 
         if record.exc_info:
@@ -312,17 +270,11 @@ class SimColourLogFormatter(SimLogFormatter):
     def __init__(
         self,
         *,
-        fmt: Optional[str] = None,
-        datefmt: Optional[str] = None,
-        sim_time_fmt: Optional[str] = None,
-        empty_sim_time_fmt: Optional[str] = None,
+        prefix_fmt: Optional[str] = None,
         color: bool = True,
     ) -> None:
         super().__init__(
-            prefix_fmt=fmt,
-            date_fmt=datefmt,
-            sim_time_fmt=sim_time_fmt,
-            empty_sim_time_fmt=empty_sim_time_fmt,
+            prefix_fmt=prefix_fmt,
             color=color,
         )
 

@@ -124,6 +124,7 @@ A test can spawn multiple coroutines, allowing for independent flows of executio
    rotating_logger
    extensions
    upgrade-2.0
+   logging_customization
 
 .. todo::
    - Add IPython section
