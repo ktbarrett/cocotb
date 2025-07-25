@@ -14,15 +14,16 @@ import os
 import sys
 import time
 import traceback
-from functools import cached_property, wraps
+from functools import wraps
 from types import TracebackType
-from typing import Dict, Optional, Union, cast
+from typing import Optional, Union
 
+import cocotb
+import cocotb.simtime
 from cocotb import _ANSI, simulator
 from cocotb._deprecation import deprecated
-from cocotb._typing import TimeUnit
 from cocotb._utils import want_color_output
-from cocotb.utils import get_sim_time, get_time_from_sim_steps
+from cocotb.utils import get_sim_time
 
 __all__ = (
     "SimColourLogFormatter",
@@ -176,10 +177,6 @@ class SimTimeContextFilter(logging.Filter):
         return True
 
 
-def _vfstrfmt(fmt: str, args: Dict[str, object]) -> str:
-    return eval(f'f"""{fmt}"""', args)
-
-
 class SimLogFormatter:
     loglevel2colour = {
         logging.TRACE: "",  # type: ignore[attr-defined]  # type checkers don't like adding module attributes after the fact
@@ -190,69 +187,51 @@ class SimLogFormatter:
         logging.CRITICAL: _ANSI.COLOR_CRITICAL,
     }
 
-    time_converter = time.localtime
+    _prefix_globals = {
+        "time": time,
+        "simtime": cocotb.simtime,
+    }
 
-    class _SimTimeConverter(dict):
-        def __init__(self, steps: int) -> None:
-            self._steps = steps
+    # class _PrefixEvalEnv(dict):
+    #     def __missing__(self, key: str) -> Union[float, None]:
+    #         if key.startswith("sim_time_"):
+    #             sim_time = self.get("created_sim_time", None)
+    #             if sim_time is None:
+    #                 return None
 
-        def __getitem__(self, key: str) -> float:
-            if key == "step":
-                return self._steps
-            else:
-                return get_time_from_sim_steps(self._steps, cast("TimeUnit", key))
+    #             unit = key[9:]  # len("sim_time_")
+    #             if unit == "step":
+    #                 return sim_time
+    #             else:
+    #                 return get_time_from_sim_steps(sim_time, cast("TimeUnit", unit))
+    #         raise NameError(f"{key!r}")
 
-    default_prefix = "{sim_time:>11} {levelname:<8} {name[-34:]:<34} " + (
-        ""
-        if _reduced_fmt
-        else "{filename[-20:]:>20}:{lineno:4} in {funcName[-31:]:31} "
+    default_prefix = (
+        "{simtime.convert(created_sim_time, 'step', to='ns') if created_sim_time else '-.--':>9}ns {levelname:<8} {name[-34:]:<34} "
+        + (
+            ""
+            if _reduced_fmt
+            else "{filename[-20:]:>20}:{lineno:<4} in {funcName[-31:]:<31} "
+        )
     )
-    default_datefmt = "%Y-%m-%d %H:%M:%S"
-    default_sim_time_fmt = "{ns:.2f}ns"
-    default_empty_sim_time_fmt = "-.--ns"
 
     def __init__(
         self,
         *,
         prefix_fmt: Optional[str] = None,
-        date_fmt: Optional[str] = None,
-        sim_time_fmt: Optional[str] = None,
-        empty_sim_time_fmt: Optional[str] = None,
         color: bool = False,
     ) -> None:
         self.prefix_fmt = prefix_fmt if prefix_fmt is not None else self.default_prefix
-        self.date_fmt = date_fmt if date_fmt is not None else self.default_datefmt
-        self.sim_time_fmt = (
-            sim_time_fmt if sim_time_fmt is not None else self.default_sim_time_fmt
-        )
-        self.empty_sim_time_fmt = (
-            empty_sim_time_fmt
-            if empty_sim_time_fmt is not None
-            else self.default_empty_sim_time_fmt
-        )
+        self._prefix_fstr = f'f"""{self.prefix_fmt}"""'
         self.color = color
 
-    def _format_time(self, record: logging.LogRecord) -> str:
-        ct = type(self).time_converter(record.created)
-        return time.strftime(self.date_fmt, ct)
-
-    def _format_sim_time(self, record: logging.LogRecord) -> str:
-        sim_time = cast("int | None", getattr(record, "created_sim_time", None))
-        if sim_time is None:
-            return _vfstrfmt(self.empty_sim_time_fmt, {})
-        else:
-            return _vfstrfmt(self.sim_time_fmt, type(self)._SimTimeConverter(sim_time))
-
-    @cached_property
-    def _uses_time(self) -> bool:
-        return "asctime" in self.prefix_fmt
-
-    @cached_property
-    def _uses_sim_time(self) -> bool:
-        return "sim_time" in self.prefix_fmt
-
     def _format_message(self, record: logging.LogRecord) -> str:
-        prefix = _vfstrfmt(self.prefix_fmt, vars(record))
+        # eval prefix
+        prefix = eval(
+            self._prefix_fstr,
+            type(self)._prefix_globals,
+            vars(record),
+        )
 
         # add padding to each line of message
         msg_lines = record.getMessage().split("\n")
@@ -281,12 +260,6 @@ class SimLogFormatter:
         return stack_info
 
     def format(self, record: logging.LogRecord) -> str:
-        if self._uses_sim_time:
-            record.sim_time = self._format_sim_time(record)
-
-        if self._uses_time:
-            record.asctime = self._format_time(record)
-
         s = self._format_message(record)
 
         if record.exc_info:
@@ -312,17 +285,11 @@ class SimColourLogFormatter(SimLogFormatter):
     def __init__(
         self,
         *,
-        fmt: Optional[str] = None,
-        datefmt: Optional[str] = None,
-        sim_time_fmt: Optional[str] = None,
-        empty_sim_time_fmt: Optional[str] = None,
+        prefix_fmt: Optional[str] = None,
         color: bool = True,
     ) -> None:
         super().__init__(
-            prefix_fmt=fmt,
-            date_fmt=datefmt,
-            sim_time_fmt=sim_time_fmt,
-            empty_sim_time_fmt=empty_sim_time_fmt,
+            prefix_fmt=prefix_fmt,
             color=color,
         )
 
