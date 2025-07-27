@@ -26,6 +26,7 @@ from typing import (
 
 import cocotb
 import cocotb._gpi_triggers
+import cocotb._scheduler
 import cocotb.handle
 from cocotb import _ANSI, simulator
 from cocotb._base_triggers import Trigger
@@ -33,6 +34,11 @@ from cocotb._decorators import Parameterized, Test
 from cocotb._extended_awaitables import SimTimeoutError, with_timeout
 from cocotb._gpi_triggers import GPITrigger, Timer
 from cocotb._outcomes import Error, Outcome
+from cocotb._shutdown import (
+    register_shutdown_callback,
+    remove_shutdown_callback,
+    run_shutdown_callbacks,
+)
 from cocotb._test import RunningTest
 from cocotb._test_factory import TestFactory
 from cocotb._test_functions import Failed
@@ -305,8 +311,9 @@ class RegressionManager:
         cocotb.handle._start_write_scheduler()
 
         # start test loop
-        self._regression_start_time = time.time()
+        self.log.info("Running tests")
         self._first_test = True
+        self._regression_start_time = time.time()
         self._execute()
 
     def _execute(self) -> None:
@@ -414,11 +421,9 @@ class RegressionManager:
         # Generate output reports
         self.xunit.write()
 
-        # TODO refactor initialization and finalization into their own module
-        # to prevent circular imports requiring local imports
-        from cocotb._init import _shutdown_testbench  # noqa: PLC0415
-
-        _shutdown_testbench()
+        # Shutdown cocotb, but first remove our own callback
+        remove_shutdown_callback(self._fail_simulation)
+        run_shutdown_callbacks("End of Regression")
 
         # Setup simulator finalization
         simulator.stop_simulator()
@@ -885,4 +890,49 @@ class RegressionManager:
     def _fail_simulation(self, msg: str) -> None:
         self._sim_failure = Error(SimFailure(msg))
         self._running_test.abort(self._sim_failure)
-        cocotb._scheduler_inst._event_loop()
+        cocotb._scheduler._inst._event_loop()
+
+
+_inst: RegressionManager = None  # type: ignore[assignment]
+
+
+def _start(_: object) -> None:
+    """Setup and run a regression."""
+
+    global _inst
+    _inst = RegressionManager()
+
+    # discover tests
+    module_str = os.getenv("COCOTB_TEST_MODULES", "")
+    if not module_str:
+        raise RuntimeError(
+            "Environment variable COCOTB_TEST_MODULES, which defines the module(s) to execute, is not defined or empty."
+        )
+    modules = [s.strip() for s in module_str.split(",") if s.strip()]
+    _inst.setup_pytest_assertion_rewriting()
+    _inst.discover_tests(*modules)
+
+    # filter tests
+    testcase_str = os.getenv("COCOTB_TESTCASE", "").strip()
+    test_filter_str = os.getenv("COCOTB_TEST_FILTER", "").strip()
+    if testcase_str and test_filter_str:
+        raise RuntimeError("Specify only one of COCOTB_TESTCASE or COCOTB_TEST_FILTER")
+    elif testcase_str:
+        warnings.warn(
+            "COCOTB_TESTCASE is deprecated in favor of COCOTB_TEST_FILTER",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        filters = [f"{s.strip()}$" for s in testcase_str.split(",") if s.strip()]
+        _inst.add_filters(*filters)
+        _inst.set_mode(RegressionMode.TESTCASE)
+    elif test_filter_str:
+        _inst.add_filters(test_filter_str)
+        _inst.set_mode(RegressionMode.TESTCASE)
+
+    cocotb._scheduler._init()
+
+    # register a callback to be called if the simulation fails
+    register_shutdown_callback(_inst._fail_simulation)
+
+    _inst.start_regression()

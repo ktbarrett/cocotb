@@ -7,10 +7,13 @@
 import cProfile
 import os
 import pstats
+from typing import Callable
 
 from cocotb._py_compat import AbstractContextManager, nullcontext
+from cocotb._shutdown import register_shutdown_callback
 
 profiling_context: AbstractContextManager[None, None]
+initialize: Callable[[], None]
 
 
 if "COCOTB_ENABLE_PROFILING" in os.environ:
@@ -20,7 +23,9 @@ if "COCOTB_ENABLE_PROFILING" in os.environ:
         global _profile
         _profile = cProfile.Profile()
 
-    def finalize() -> None:
+        register_shutdown_callback(finalize)
+
+    def finalize(_: object) -> None:
         ps = pstats.Stats(_profile).sort_stats("cumulative")
         ps.dump_stats("cocotb.pstat")
 
@@ -38,9 +43,6 @@ if "COCOTB_ENABLE_PROFILING" in os.environ:
 else:
 
     def initialize() -> None:
-        pass
-
-    def finalize() -> None:
         pass
 
     profiling_context = nullcontext()

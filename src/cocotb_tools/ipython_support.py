@@ -60,7 +60,7 @@ async def embed(user_ns: Dict[str, Any] = {}) -> None:
     def _runner(x):
         """Handler for async functions"""
         nonlocal shell
-        ret = cocotb._scheduler_inst._queue_function(x)
+        ret = cocotb._scheduler._inst._queue_function(x)
         shell.prompts._show_time = shell.execution_count
         return ret
 

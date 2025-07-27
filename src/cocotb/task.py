@@ -198,8 +198,8 @@ class Task(Generic[ResultType]):
             callback(self)
 
         # Wake up waiting Tasks.
-        cocotb._scheduler_inst._react(self.complete)
-        cocotb._scheduler_inst._react(self._join)
+        cocotb._scheduler._inst._react(self.complete)
+        cocotb._scheduler._inst._react(self._join)
 
     def _advance(self, exc: Union[BaseException, None]) -> Union[Trigger, None]:
         """Resume execution of the Task.
@@ -263,8 +263,8 @@ class Task(Generic[ResultType]):
                 return trigger
 
     def _schedule_resume(self, exc: Optional[BaseException] = None) -> None:
-        cocotb._scheduler_inst._unschedule(self)
-        cocotb._scheduler_inst._schedule_task_internal(self, exc)
+        cocotb._scheduler._inst._unschedule(self)
+        cocotb._scheduler._inst._schedule_task_internal(self, exc)
 
     @deprecated("`task.kill()` is deprecated in favor of `task.cancel()`")
     def kill(self) -> None:
@@ -272,7 +272,7 @@ class Task(Generic[ResultType]):
 
         if self._state in (_TaskState.PENDING, _TaskState.SCHEDULED):
             # Unschedule if scheduled and unprime triggers if pending.
-            cocotb._scheduler_inst._unschedule(self)
+            cocotb._scheduler._inst._unschedule(self)
         elif self._state is _TaskState.UNSTARTED:
             # Don't need to unschedule.
             pass
@@ -353,7 +353,7 @@ class Task(Generic[ResultType]):
             self._schedule_resume()
         elif self._state in (_TaskState.UNSTARTED, _TaskState.RUNNING):
             # (Re)schedule to throw CancelledError
-            cocotb._scheduler_inst._schedule_task_internal(self)
+            cocotb._scheduler._inst._schedule_task_internal(self)
         else:
             # Already finished or cancelled
             return False
@@ -379,7 +379,7 @@ class Task(Generic[ResultType]):
             self._set_outcome(Error(self._cancelled_error), _TaskState.CANCELLED)
         else:
             # Unprime and unschedule the Task so it's out of the scheduler.
-            cocotb._scheduler_inst._unschedule(self)
+            cocotb._scheduler._inst._unschedule(self)
             # Force CancelledError to be thrown immediately.
             self._advance(None)
 
@@ -443,7 +443,7 @@ class Task(Generic[ResultType]):
 
     def __await__(self) -> Generator[Trigger, None, ResultType]:
         if self._state is _TaskState.UNSTARTED:
-            cocotb._scheduler_inst._schedule_task_internal(self)
+            cocotb._scheduler._inst._schedule_task_internal(self)
             yield self.complete
         elif not self.done():
             yield self.complete
@@ -458,7 +458,7 @@ def current_task() -> Task[object]:
 
     .. versionadded:: 2.0
     """
-    task = cocotb._scheduler_inst._current_task
+    task = cocotb._scheduler._inst._current_task
     if task is None:
         raise RuntimeError("No Task is currently running")
     return task

@@ -67,8 +67,8 @@ class RunningTest:
             self.abort(Error(e))
 
     def start(self) -> None:
-        cocotb._scheduler_inst._schedule_task_internal(self._main_task)
-        cocotb._scheduler_inst._event_loop()
+        cocotb._scheduler._inst._schedule_task_internal(self._main_task)
+        cocotb._scheduler._inst._event_loop()
 
     def result(self) -> Outcome[None]:
         if self._outcome is None:  # pragma: no cover
@@ -108,7 +108,7 @@ class RunningTest:
         if task.cancelled():
             return
         # if there's a Task awaiting this one, don't fail
-        if task.complete in cocotb._scheduler_inst._trigger2tasks:
+        if task.complete in cocotb._scheduler._inst._trigger2tasks:
             return
         # if no failure, do nothing
         e = task.exception()
@@ -147,7 +147,7 @@ def start_soon(
     .. versionadded:: 1.6
     """
     task = create_task(coro, name=name)
-    cocotb._scheduler_inst._schedule_task(task)
+    cocotb._scheduler._inst._schedule_task(task)
     return task
 
 
@@ -227,7 +227,9 @@ def create_task(
         return coro
     elif isinstance(coro, Coroutine):
         task = Task[ResultType](coro, name=name)
-        cocotb._regression_manager._running_test.add_task(task)
+        import cocotb.regression
+
+        cocotb.regression._inst._running_test.add_task(task)
         return task
     elif inspect.iscoroutinefunction(coro):
         raise TypeError(
