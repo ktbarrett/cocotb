@@ -1,7 +1,7 @@
 import importlib
+import operator
 import os
-from functools import reduce
-from typing import Any, Callable, List, Tuple, cast
+from typing import Callable, List, Tuple
 
 
 def load_entry(argv: List[str]) -> None:
@@ -12,10 +12,9 @@ def load_entry(argv: List[str]) -> None:
         ",".join(
             (
                 "cocotb_tools._coverage:start_cocotb_library_coverage",
-                "cocotb.logging:_init",
-                "cocotb.logging:_setup_formatter",
+                "cocotb.logging:_configure",
                 "cocotb._init:init_package_from_simulation",
-                "cocotb._init:run_regression",
+                "cocotb.regression:_start",
             )
         ),
     )
@@ -26,7 +25,7 @@ def load_entry(argv: List[str]) -> None:
     try:
         entry_points_str = entry_point_str.split(",")
         for entry_point_str in entry_points_str:
-            entry_module_str, entry_func_str = entry_point_str.split(":")
+            entry_module_str, entry_func_str = entry_point_str.split(":", 1)
             # TODO maybe some basic validation of the module and function names.
             # WITHOUT IMPORTING THEM.
             entry_points.append((entry_module_str, entry_func_str))
@@ -37,7 +36,7 @@ def load_entry(argv: List[str]) -> None:
     # Expect failure to stop the loading of any additional entry points.
     for entry_module_str, entry_func_str in entry_points:
         entry_module = importlib.import_module(entry_module_str)
-        entry_func: Callable[[List[str]], object] = reduce(
-            getattr, entry_func_str.split("."), cast("Any", entry_module)
+        entry_func: Callable[[List[str]], object] = operator.attrgetter(entry_func_str)(
+            entry_module
         )
         entry_func(argv)

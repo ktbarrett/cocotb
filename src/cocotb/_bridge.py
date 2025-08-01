@@ -62,7 +62,7 @@ def resume(
 
     @functools.wraps(func)
     def wrapper(*args: "P.args", **kwargs: "P.kwargs") -> Result:
-        return cocotb._scheduler_inst._queue_function(func(*args, **kwargs))
+        return cocotb._scheduler._inst._queue_function(func(*args, **kwargs))
 
     return wrapper
 
@@ -104,7 +104,7 @@ def bridge(
     def wrapper(
         *args: "P.args", **kwargs: "P.kwargs"
     ) -> Coroutine[Trigger, None, Result]:
-        return cocotb._scheduler_inst._run_in_executor(func, *args, **kwargs)
+        return cocotb._scheduler._inst._run_in_executor(func, *args, **kwargs)
 
     return wrapper
 

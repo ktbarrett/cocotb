@@ -22,12 +22,12 @@ def start_cocotb_library_coverage(_: object) -> None:  # pragma: no cover
         )
         library_coverage.start()
 
-        def stop_library_coverage() -> None:
+        def stop_library_coverage(_: object) -> None:
             library_coverage.stop()
             library_coverage.save()  # pragma: no cover
 
         # This must come after `library_coverage.start()` to ensure coverage is being
         # collected on the cocotb library before importing from it.
-        from cocotb._init import _register_shutdown_callback  # noqa: PLC0415
+        from cocotb._shutdown import register_shutdown_callback  # noqa: PLC0415
 
-        _register_shutdown_callback(stop_library_coverage)
+        register_shutdown_callback(stop_library_coverage)
