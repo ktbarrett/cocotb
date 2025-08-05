@@ -12,17 +12,22 @@ import io
 import logging
 import os
 import sys
-import time
 import traceback
-from functools import cached_property, wraps
+from functools import wraps
 from types import TracebackType
-from typing import Dict, Optional, Union, cast
+from typing import Optional, Union
 
 from cocotb import _ANSI, simulator
 from cocotb._deprecation import deprecated
-from cocotb._typing import TimeUnit
 from cocotb._utils import want_color_output
-from cocotb.utils import get_sim_time, get_time_from_sim_steps
+from cocotb.utils import get_sim_time
+
+# For formatting log messages
+# isort: split
+
+import time  # noqa: F401
+
+from cocotb.utils import get_sim_steps, get_time_from_sim_steps  # noqa: F401
 
 __all__ = (
     "SimColourLogFormatter",
@@ -37,14 +42,11 @@ logging.TRACE = 5  # type: ignore[attr-defined]  # type checkers don't like addi
 logging.addLevelName(5, "TRACE")
 
 _reduced_fmt_env = os.environ.get("COCOTB_REDUCED_LOG_FMT")
-if _reduced_fmt_env is not None:
-<<<<<<< Updated upstream
-=======
+if _reduced_fmt_env:
     # warnings.warn(
     #     "`COCOTB_REDUCED_LOG_FMT` is deprecated. Use COCOTB_LOG_CONFIG instead.",
     #     DeprecationWarning,
     # )
->>>>>>> Stashed changes
     _reduced_fmt = bool(int(_reduced_fmt_env))
 else:
     _reduced_fmt = False
@@ -183,10 +185,6 @@ class SimTimeContextFilter(logging.Filter):
         return True
 
 
-def _vfstrfmt(fmt: str, args: Dict[str, object]) -> str:
-    return eval(f'f"""{fmt}"""', args)
-
-
 class SimLogFormatter:
     loglevel2colour = {
         logging.TRACE: "",  # type: ignore[attr-defined]  # type checkers don't like adding module attributes after the fact
@@ -198,11 +196,11 @@ class SimLogFormatter:
     }
 
     default_prefix = (
-        "{get_time_from_sim_steps(created_sim_time, 'ns') if created_sim_time else '-.--':>9}ns {levelname:<8} {name[-34:]:<34} "
+        "{get_time_from_sim_steps(record.created_sim_time, 'ns') if record.created_sim_time else '-.--':>9}ns {record.levelname:<8} {record.name[-34:]:<34} "
         + (
             ""
             if _reduced_fmt
-            else "{filename[-20:]:>20}:{lineno:4} in {funcName[-31:]:31} {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created))}"
+            else "{record.filename[-20:]:>20}:{record.lineno:4} in {record.funcName[-31:]:31} "
         )
     )
 
@@ -214,9 +212,10 @@ class SimLogFormatter:
     ) -> None:
         self.prefix_fmt = prefix_fmt if prefix_fmt is not None else self.default_prefix
         self.color = color
+        self._format_prefix = eval(f"lambda record: f'''{self.prefix_fmt}'''")
 
     def _format_message(self, record: logging.LogRecord) -> str:
-        prefix = _vfstrfmt(self.prefix_fmt, record.__dict__ | locals() | globals())
+        prefix = self._format_prefix(record)
 
         # add padding to each line of message
         msg_lines = record.getMessage().split("\n")
