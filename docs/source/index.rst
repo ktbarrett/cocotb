@@ -125,6 +125,7 @@ A test can spawn multiple coroutines, allowing for independent flows of executio
    extensions
    upgrade-2.0
    update_indexing
+   logging_customization
 
 .. todo::
    - Add IPython section

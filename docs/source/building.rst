@@ -224,6 +224,8 @@ Cocotb
 
         If the tests pass, your simulator and version apply inertial writes as expected and you can turn on :envvar:`COCOTB_TRUST_INERTIAL_WRITES`.
 
+.. envvar:: COCOTB_LOG_PREFIX
+    TODO
 
 Regression Manager
 ~~~~~~~~~~~~~~~~~~
