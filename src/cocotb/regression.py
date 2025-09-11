@@ -13,6 +13,7 @@ import logging
 import os
 import random
 import re
+import sys
 import time
 import warnings
 from enum import auto
@@ -34,7 +35,8 @@ from cocotb._decorators import Parameterized, Test
 from cocotb._extended_awaitables import with_timeout
 from cocotb._gpi_triggers import GPITrigger, Timer
 from cocotb._outcomes import Error, Outcome
-from cocotb._test import RunningTest
+from cocotb._shutdown import _shutdown
+from cocotb._test import RunningTest, get_running_test, set_running_test
 from cocotb._test_factory import TestFactory
 from cocotb._test_functions import Failed
 from cocotb._utils import (
@@ -72,9 +74,6 @@ class SimFailure(BaseException):
         Not to be raised or caught within a test.
         Only used for marking expected failure with ``expect_error`` in :func:`cocotb.test`.
     """
-
-
-_logger = logging.getLogger(__name__)
 
 
 def _format_doc(docstring: Union[str, None]) -> str:
@@ -146,8 +145,7 @@ class RegressionManager:
 
     def __init__(self) -> None:
         self._test: Test
-        self._running_test: RunningTest
-        self.log = _logger
+        self.log = logging.getLogger(__name__)
         self._regression_start_time: float
         self._test_results: List[_TestResults] = []
         self.total_tests = 0
@@ -254,8 +252,7 @@ class RegressionManager:
         self.log.debug("Registered test %r", test.fullname)
         self._test_queue.append(test)
 
-    @classmethod
-    def setup_pytest_assertion_rewriting(cls) -> None:
+    def setup_pytest_assertion_rewriting(self) -> None:
         """Configure pytest to rewrite assertions for better failure messages.
 
         Must be called before all modules containing tests are imported.
@@ -263,7 +260,7 @@ class RegressionManager:
         try:
             import pytest  # noqa: PLC0415
         except ImportError:
-            _logger.info(
+            self.log.info(
                 "pytest not found, install it to enable better AssertionError messages"
             )
             return
@@ -284,7 +281,7 @@ class RegressionManager:
             )
             install_importhook(pytest_conf)
         except Exception:
-            _logger.exception(
+            self.log.exception(
                 "Configuring the assertion rewrite hook using pytest %s failed. "
                 "Please file a bug report!",
                 pytest.__version__,
@@ -317,6 +314,7 @@ class RegressionManager:
 
         # start write scheduler
         cocotb.handle._start_write_scheduler()
+        self.log.info("Running tests")
 
         # start test loop
         self._regression_start_time = time.time()
@@ -355,10 +353,11 @@ class RegressionManager:
 
             # initialize the test, if it fails, record and continue
             try:
-                self._running_test = self._init_test()
+                running_test = self._init_test()
             except Exception:
                 self._record_test_init_failed()
                 continue
+            set_running_test(running_test)
 
             self._log_test_start()
 
@@ -401,7 +400,7 @@ class RegressionManager:
         self._start_sim_time = get_sim_time("ns")
         self._start_time = time.time()
 
-        self._running_test.start()
+        get_running_test().start()
 
     def _tear_down(self) -> None:
         """Called by :meth:`_execute` when there are no more tests to run to finalize the regression."""
@@ -422,11 +421,7 @@ class RegressionManager:
         # Generate output reports
         self.xunit.write()
 
-        # TODO refactor initialization and finalization into their own module
-        # to prevent circular imports requiring local imports
-        from cocotb._init import _shutdown_testbench  # noqa: PLC0415
-
-        _shutdown_testbench()
+        _shutdown("Regression ended normally")
 
         # Setup simulator finalization
         simulator.stop_simulator()
@@ -440,7 +435,7 @@ class RegressionManager:
 
         # Judge and record pass/fail.
         self._score_test(
-            self._running_test.result(),
+            get_running_test().result(),
             wall_time,
             sim_time_ns,
         )
@@ -896,3 +891,48 @@ class RegressionManager:
         self._sim_failure = Error(SimFailure(msg))
         self._running_test.abort(self._sim_failure)
         cocotb._scheduler_inst._event_loop()
+
+
+_inst: RegressionManager
+
+
+def _run(_: object) -> None:
+    """Setup and run a regression."""
+
+    global _inst
+    _inst = RegressionManager()
+
+    # sys.path normally includes "" (the current directory), but does not appear to when python is embedded.
+    # Add it back because users expect to be able to import files in their test directory.
+    sys.path.insert(0, "")
+
+    # discover tests
+    module_str = os.getenv("COCOTB_TEST_MODULES", "")
+    if not module_str:
+        raise RuntimeError(
+            "Environment variable COCOTB_TEST_MODULES, which defines the module(s) to execute, is not defined or empty."
+        )
+    modules = [s.strip() for s in module_str.split(",") if s.strip()]
+    _inst.setup_pytest_assertion_rewriting()
+    _inst.discover_tests(*modules)
+
+    # filter tests
+    testcase_str = os.getenv("COCOTB_TESTCASE", "").strip()
+    test_filter_str = os.getenv("COCOTB_TEST_FILTER", "").strip()
+    if testcase_str and test_filter_str:
+        raise RuntimeError("Specify only one of COCOTB_TESTCASE or COCOTB_TEST_FILTER")
+    elif testcase_str:
+        warnings.warn(
+            "COCOTB_TESTCASE is deprecated in favor of COCOTB_TEST_FILTER",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        filters = [f"{s.strip()}$" for s in testcase_str.split(",") if s.strip()]
+        _inst.add_filters(*filters)
+        _inst.set_mode(RegressionMode.TESTCASE)
+    elif test_filter_str:
+        _inst.add_filters(test_filter_str)
+        _inst.set_mode(RegressionMode.TESTCASE)
+
+    # start Regression Manager
+    _inst.start_regression()

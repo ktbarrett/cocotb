@@ -12,60 +12,35 @@ import time
 import warnings
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, List, cast
+from typing import List, cast
 
 import cocotb
 import cocotb._profiling
+import cocotb._shutdown as shutdown
 import cocotb.handle
 import cocotb.logging
 import cocotb.simtime
 import cocotb.simulator
-from cocotb._scheduler import Scheduler
-from cocotb.regression import RegressionManager, RegressionMode
 
 log: logging.Logger
-
-
-def _setup_logging() -> None:
-    cocotb.log = logging.getLogger("test")
-    cocotb.log.setLevel(logging.INFO)
-
-    global log
-    log = logging.getLogger("cocotb")
-
-
-_shutdown_callbacks: List[Callable[[], None]] = []
-"""List of callbacks to be called when cocotb shuts down."""
-
-
-def _register_shutdown_callback(cb: Callable[[], None]) -> None:
-    """Register a callback to be called when cocotb shuts down."""
-    _shutdown_callbacks.append(cb)
-
-
-def _shutdown_testbench() -> None:
-    """Call all registered shutdown callbacks."""
-    while _shutdown_callbacks:
-        cb = _shutdown_callbacks.pop(0)
-        cb()
 
 
 def init_package_from_simulation(argv: List[str]) -> None:
     """Initialize the cocotb package from a simulation context."""
 
     # register a callback to be called if the simulation fails
-    cocotb.simulator.set_sim_event_callback(_sim_event)
 
     cocotb.is_simulation = True
 
     cocotb.argv = argv
 
-    # sys.path normally includes "" (the current directory), but does not appear to when python is embedded.
-    # Add it back because users expect to be able to import files in their test directory.
-    sys.path.insert(0, "")
-
     cocotb.logging._init()
-    _setup_logging()
+
+    cocotb.log = logging.getLogger("test")
+    cocotb.log.setLevel(logging.INFO)
+
+    global log
+    log = logging.getLogger("cocotb")
 
     # From https://www.python.org/dev/peps/pep-0565/#recommended-filter-settings-for-test-runners
     # If the user doesn't want to see these, they can always change the global
@@ -79,7 +54,6 @@ def init_package_from_simulation(argv: List[str]) -> None:
     log.info("Running on %s version %s", cocotb.SIM_NAME, cocotb.SIM_VERSION)
 
     cocotb._profiling.initialize()
-    _register_shutdown_callback(cocotb._profiling.finalize)
 
     _process_plusargs()
     _process_packages()
@@ -88,36 +62,13 @@ def init_package_from_simulation(argv: List[str]) -> None:
     _start_user_coverage()
 
     cocotb.simtime._init()
+    cocotb._test.init()
 
     log.info(
         "Initialized cocotb v%s from %s",
         cocotb.__version__,
         Path(__file__).parent.absolute(),
     )
-
-
-def run_regression(_: object) -> None:
-    """Setup and run a regression."""
-
-    _setup_regression_manager()
-
-    # setup global scheduler system
-    cocotb._scheduler_inst = Scheduler()
-
-    # start Regression Manager
-    log.info("Running tests")
-    cocotb._regression_manager.start_regression()
-
-
-def _sim_event(msg: str) -> None:
-    """Function that can be called externally to signal an event."""
-    # We simply return here as the simulator will exit
-    # so no cleanup is needed
-    if hasattr(cocotb, "_regression_manager"):
-        cocotb._regression_manager._fail_simulation(msg)
-    else:
-        log.error(msg)
-        _shutdown_testbench()
 
 
 def _process_plusargs() -> None:
@@ -194,12 +145,12 @@ def _start_user_coverage() -> None:
                 user_coverage = coverage.coverage(config_file=config_filepath)
             user_coverage.start()
 
-            def stop_user_coverage() -> None:
+            def stop_user_coverage(reason: str) -> None:
                 user_coverage.stop()
                 log.debug("Writing user coverage data")
                 user_coverage.save()
 
-            _register_shutdown_callback(stop_user_coverage)
+            shutdown.register(stop_user_coverage)
 
 
 def _setup_random_seed() -> None:
@@ -267,35 +218,3 @@ def _setup_root_handle() -> None:
         raise RuntimeError(f"Can not find root handle {root_name!r}")
 
     cocotb.top = cocotb.handle._make_sim_object(handle)
-
-
-def _setup_regression_manager() -> None:
-    cocotb._regression_manager = RegressionManager()
-
-    # discover tests
-    module_str = os.getenv("COCOTB_TEST_MODULES", "")
-    if not module_str:
-        raise RuntimeError(
-            "Environment variable COCOTB_TEST_MODULES, which defines the module(s) to execute, is not defined or empty."
-        )
-    modules = [s.strip() for s in module_str.split(",") if s.strip()]
-    cocotb._regression_manager.setup_pytest_assertion_rewriting()
-    cocotb._regression_manager.discover_tests(*modules)
-
-    # filter tests
-    testcase_str = os.getenv("COCOTB_TESTCASE", "").strip()
-    test_filter_str = os.getenv("COCOTB_TEST_FILTER", "").strip()
-    if testcase_str and test_filter_str:
-        raise RuntimeError("Specify only one of COCOTB_TESTCASE or COCOTB_TEST_FILTER")
-    elif testcase_str:
-        warnings.warn(
-            "COCOTB_TESTCASE is deprecated in favor of COCOTB_TEST_FILTER",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        filters = [f"{s.strip()}$" for s in testcase_str.split(",") if s.strip()]
-        cocotb._regression_manager.add_filters(*filters)
-        cocotb._regression_manager.set_mode(RegressionMode.TESTCASE)
-    elif test_filter_str:
-        cocotb._regression_manager.add_filters(test_filter_str)
-        cocotb._regression_manager.set_mode(RegressionMode.TESTCASE)

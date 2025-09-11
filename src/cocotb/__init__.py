@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
     from cocotb._scheduler import Scheduler
     from cocotb.handle import SimHandleBase
-    from cocotb.regression import RegressionManager
 
 __all__ = (
     "RANDOM_SEED",
@@ -67,9 +66,6 @@ This logger defaults to the :data:`logging.INFO` log level.
 
 _scheduler_inst: "Scheduler"
 """The global scheduler instance."""
-
-_regression_manager: "RegressionManager"
-"""The global regression manager instance."""
 
 argv: List[str]
 """The argument list as seen by the simulator."""

@@ -21,7 +21,13 @@ from cocotb._outcomes import Error, Outcome, Value
 from cocotb._test_functions import TestSuccess
 from cocotb.task import ResultType, Task
 
-_pdb_on_exception = "COCOTB_PDB_ON_EXCEPTION" in os.environ
+pdb_on_exception: bool = False
+
+
+def init() -> None:
+    global pdb_on_exception
+    if "COCOTB_PDB_ON_EXCEPTION" in os.environ:
+        pdb_on_exception = True
 
 
 class RunningTest:
@@ -88,7 +94,7 @@ class RunningTest:
             return
 
         # Break into pdb on test end before all Tasks are killed.
-        if _pdb_on_exception and isinstance(outcome, Error):
+        if pdb_on_exception and isinstance(outcome, Error):
             try:
                 pdb.post_mortem(outcome.error.__traceback__)
             except BaseException:
@@ -124,6 +130,26 @@ class RunningTest:
         else:
             task._log.warning(e, exc_info=e)
             self.abort(Error(e))
+
+
+_running_test: RunningTest | None = None
+
+
+def set_running_test(test: RunningTest) -> None:
+    global _running_test
+    assert _running_test is None
+    _running_test = test
+
+
+def get_running_test() -> RunningTest:
+    assert _running_test is not None
+    return _running_test
+
+
+def clear_running_test() -> None:
+    global _running_test
+    assert _running_test is not None
+    _running_test = None
 
 
 def start_soon(
@@ -230,7 +256,7 @@ def create_task(
         return coro
     elif isinstance(coro, Coroutine):
         task = Task[ResultType](coro, name=name)
-        cocotb._regression_manager._running_test.add_task(task)
+        get_running_test().add_task(task)
         return task
     elif inspect.iscoroutinefunction(coro):
         raise TypeError(

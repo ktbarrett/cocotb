@@ -8,6 +8,7 @@ import cProfile
 import os
 import pstats
 
+import cocotb._shutdown as shutdown
 from cocotb._py_compat import AbstractContextManager, nullcontext
 
 profiling_context: AbstractContextManager[None, None]
@@ -20,9 +21,11 @@ if "COCOTB_ENABLE_PROFILING" in os.environ:
         global _profile
         _profile = cProfile.Profile()
 
-    def finalize() -> None:
-        ps = pstats.Stats(_profile).sort_stats("cumulative")
-        ps.dump_stats("cocotb.pstat")
+        def finalize(reason: str) -> None:
+            ps = pstats.Stats(_profile).sort_stats("cumulative")
+            ps.dump_stats("cocotb.pstat")
+
+        shutdown.register(finalize)
 
     class _profiling_context(AbstractContextManager[None, None]):
         """Context manager that profiles its contents"""
@@ -38,9 +41,6 @@ if "COCOTB_ENABLE_PROFILING" in os.environ:
 else:
 
     def initialize() -> None:
-        pass
-
-    def finalize() -> None:
         pass
 
     profiling_context = nullcontext()
