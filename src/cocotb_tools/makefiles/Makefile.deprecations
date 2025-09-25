@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 ifdef VERILATOR_TRACE
-    $(warning VERILATOR_TRACE is deprecated, see the "Simulator Support" section in the documentation.)
+    $(warning VERILATOR_TRACE is deprecated, use `WAVES=1` instead.)
 endif
 
 ifeq ($(SIM_LOWERCASE),aldec)

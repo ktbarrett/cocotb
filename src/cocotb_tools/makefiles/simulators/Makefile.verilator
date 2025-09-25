@@ -42,6 +42,11 @@ ifeq ($(VERILATOR_SIM_DEBUG), 1)
 endif
 
 ifeq ($(VERILATOR_TRACE),1)
+  WAVES := 1
+  $(warning `VERILATOR_TRACE` is deprecated, use `WAVES=1` instead.)
+endif
+
+ifeq ($(WAVES),1)
   COMPILE_ARGS += --trace --trace-structs
   SIM_ARGS += --trace
 endif
