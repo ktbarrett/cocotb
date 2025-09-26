@@ -446,3 +446,11 @@ class Scheduler:
                         self._pending_events.append(ext.event)
         finally:
             self._current_task = None
+
+
+_inst: "Scheduler"
+
+
+def _init() -> None:
+    global _inst
+    _inst = Scheduler()

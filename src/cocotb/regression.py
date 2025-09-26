@@ -28,6 +28,7 @@ from typing import (
 
 import cocotb
 import cocotb._gpi_triggers
+import cocotb._scheduler
 import cocotb.handle
 from cocotb import logging as cocotb_logging
 from cocotb import simulator
@@ -889,8 +890,8 @@ class RegressionManager:
 
     def _fail_simulation(self, msg: str) -> None:
         self._sim_failure = Error(SimFailure(msg))
-        self._running_test.abort(self._sim_failure)
-        cocotb._scheduler_inst._event_loop()
+        self._test.get_cur.abort(self._sim_failure)
+        cocotb._scheduler._inst._event_loop()
 
 
 _inst: RegressionManager

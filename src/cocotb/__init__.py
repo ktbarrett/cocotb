@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from logging import Logger
     from types import SimpleNamespace
 
-    from cocotb._scheduler import Scheduler
     from cocotb.handle import SimHandleBase
 
 __all__ = (
@@ -63,9 +62,6 @@ This logger defaults to the :data:`logging.INFO` log level.
     This was previously the ``"cocotb"`` Logger.
     It is now a Logger under the ``"test"`` namespace.
 """
-
-_scheduler_inst: "Scheduler"
-"""The global scheduler instance."""
 
 argv: List[str]
 """The argument list as seen by the simulator."""

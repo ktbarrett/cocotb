@@ -29,6 +29,7 @@ from typing import (
 )
 
 import cocotb
+import cocotb._scheduler
 from cocotb import simulator
 from cocotb._base_triggers import Event
 from cocotb._deprecation import deprecated
@@ -782,7 +783,7 @@ def _start_write_scheduler() -> None:
     global _write_task
     if _write_task is None:
         _write_task = Task(_do_writes())
-        cocotb._scheduler_inst._schedule_task(_write_task)
+        cocotb._scheduler._inst._schedule_task(_write_task)
 
 
 def _stop_write_scheduler() -> None:
