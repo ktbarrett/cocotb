@@ -6,7 +6,6 @@ import logging
 import threading
 from enum import IntEnum
 from typing import (
-    TYPE_CHECKING,
     Callable,
     Coroutine,
     Generic,
@@ -18,10 +17,8 @@ import cocotb
 from cocotb import debug
 from cocotb._base_triggers import Event, Trigger
 from cocotb._exceptions import InternalError
+from cocotb._outcomes import Outcome
 from cocotb._py_compat import ParamSpec
-
-if TYPE_CHECKING:
-    from cocotb._outcomes import Outcome
 
 P = ParamSpec("P")
 

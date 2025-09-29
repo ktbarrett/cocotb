@@ -7,13 +7,14 @@ Tests for synchronization primitives like Lock and Event
 
 import random
 import re
-from typing import TYPE_CHECKING, Any, List
+from typing import Any, List
 
 import pytest
 from common import assert_takes
 
 import cocotb
 from cocotb._base_triggers import Trigger, _InternalEvent
+from cocotb.task import Task
 from cocotb.triggers import (
     Event,
     Lock,
@@ -22,9 +23,6 @@ from cocotb.triggers import (
     Timer,
     with_timeout,
 )
-
-if TYPE_CHECKING:
-    from cocotb.task import Task
 
 
 @cocotb.test()

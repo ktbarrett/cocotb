@@ -4,16 +4,20 @@
 import asyncio.queues
 import collections
 import heapq
+import sys
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Deque, Generic, List, Tuple, TypeVar
+from typing import Deque, Generic, List, Tuple, TypeVar
 
 import cocotb
 from cocotb._utils import pointer_str
 from cocotb.task import Task
 from cocotb.triggers import Event
 
-if TYPE_CHECKING:
-    from typing import Protocol, Self
+if sys.version_info >= (3, 11):
+    from typing import Self
+
+if sys.version_info >= (3, 8):
+    from typing import Protocol
 
     class SupportsRichComparison(Protocol):
         def __eq__(self, other: object) -> bool: ...

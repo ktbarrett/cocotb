@@ -6,19 +6,11 @@
 
 """A collection of triggers which a testbench can :keyword:`await`."""
 
+import sys
 import warnings
 from decimal import Decimal
 from fractions import Fraction
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Generic,
-    Optional,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, ClassVar, Generic, Optional, TypeVar, Union
 
 import cocotb
 import cocotb.handle
@@ -29,7 +21,7 @@ from cocotb._typing import RoundMode, TimeUnit
 from cocotb._utils import pointer_str, singleton
 from cocotb.utils import get_sim_steps, get_time_from_sim_steps
 
-if TYPE_CHECKING:
+if sys.version_info >= (3, 11):
     from cocotb._py_compat import Self
 
 

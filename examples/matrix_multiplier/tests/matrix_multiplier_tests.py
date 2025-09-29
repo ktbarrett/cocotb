@@ -5,9 +5,9 @@ import logging
 import math
 import os
 import random
+import sys
 from collections import deque
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Deque,
@@ -24,11 +24,9 @@ from typing import (
 import cocotb
 from cocotb.clock import Clock
 from cocotb.handle import LogicObject, ValueObjectBase
+from cocotb.task import Task
 from cocotb.triggers import Event, FallingEdge, ReadOnly, RisingEdge, Trigger
 from cocotb.types import Array, LogicArray, Range
-
-if TYPE_CHECKING:
-    from cocotb.task import Task
 
 T = TypeVar("T")
 
@@ -274,7 +272,7 @@ class MatrixMultiplierModel:
             cb(result)
 
 
-if TYPE_CHECKING:
+if sys.version_info >= (3, 8):
     from typing import Protocol
 
     T_contra = TypeVar("T_contra", contravariant=True)
