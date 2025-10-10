@@ -124,3 +124,12 @@ Additionally, cocotb should work on the latest version of Windows, Linux, and ma
 
 cocotb only supports x86_64 architectures and requires a 64-bit operating system.
 (Note: 32-bit x86 applications can be run on 64-bit operating systems.)
+
+Simulator Support
+-----------------
+
+cocotb aims to support all major simulators on all operating systems where that simulator is supported.
+Our official support is limited to what we can test in our CI system.
+cocotb's build systems (:ref:`Makefiles <building>` or :ref:`Python runners <api-runner>`) support more simulators,
+and cocotb can theoretically work with any simulator that supports the :term:`VPI` or :term:`VHPI`;
+however, such simulators are not officially supported.
