@@ -1174,9 +1174,11 @@ def _setup_regression_manager() -> None:
         _manager_inst.set_mode(RegressionMode.TESTCASE)
 
 
-def _run_regression() -> None:
-    """Setup and run a regression."""
+def _init_regression() -> None:
+    cocotb.simulator.register_start_of_sim_time_callback(_run_regression)
 
+
+def _run_regression() -> None:
     # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.
     # Add it back because users expect to be able to import files in their test directory.
     sys.path.insert(0, "")

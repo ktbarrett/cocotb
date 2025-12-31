@@ -9,13 +9,16 @@ from __future__ import annotations
 import sys
 
 import cocotb
+import cocotb.simulator
 from cocotb_tools import _env
 from cocotb_tools._pytest._regression import RegressionManager
 
 
 def run_regression() -> None:
-    """Run regression using pytest as regression manager for cocotb tests."""
+    cocotb.simulator.register_start_of_sim_time_callback(_run_regression)
 
+
+def _run_regression() -> None:
     # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.
     # Add it back because users expect to be able to import files in their test directory.
     sys.path.insert(0, "")

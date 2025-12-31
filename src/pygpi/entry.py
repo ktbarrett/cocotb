@@ -16,7 +16,7 @@ def load_entry() -> None:
             "cocotb_tools._coverage:start_cocotb_library_coverage",
             "cocotb.logging:_configure",
             "cocotb._init:init_package_from_simulation",
-            "cocotb.regression:_run_regression",
+            "cocotb.regression:_init_regression",
         ),
     )
 
