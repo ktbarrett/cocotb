@@ -1174,7 +1174,7 @@ def _setup_regression_manager() -> None:
         _manager_inst.set_mode(RegressionMode.TESTCASE)
 
 
-def _run_regression() -> None:
+def _init_regression() -> None:
     """Setup and run a regression."""
 
     # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.
@@ -1189,8 +1189,11 @@ def _run_regression() -> None:
 
     _setup_regression_manager()
 
-    if _env.get_bool("COCOTB_LIST_TESTS", False):
-        _manager_inst.list_tests()
-    else:
-        _manager_inst.start_regression()
-        shutdown.register(_manager_inst._on_sim_end)
+    def run_regression() -> None:
+        if _env.get_bool("COCOTB_LIST_TESTS", False):
+            _manager_inst.list_tests()
+        else:
+            _manager_inst.start_regression()
+            shutdown.register(_manager_inst._on_sim_end)
+
+    cocotb.simulator.register_start_of_sim_time_callback(run_regression)
