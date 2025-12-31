@@ -33,7 +33,6 @@ def init_package_from_simulation() -> None:
     cocotb._shutdown._init()
     cocotb.logging._init()
     cocotb._profiling._init()
-    cocotb.simtime._init()
 
     # Set up local "cocotb" logger
     global log
@@ -48,8 +47,6 @@ def init_package_from_simulation() -> None:
     cocotb.SIM_VERSION = cocotb.simulator.get_simulator_version().strip()
     _process_plusargs()
     _setup_random_seed()
-    _setup_root_handle()
-    _process_packages()
     _start_user_coverage()
 
     # log info about the simulation
@@ -59,6 +56,13 @@ def init_package_from_simulation() -> None:
         Path(__file__).parent.absolute(),
     )
     log.info("Running on %s version %s", cocotb.SIM_NAME, cocotb.SIM_VERSION)
+
+    def init_hdl_objects() -> None:
+        cocotb.simtime._init()
+        _setup_root_handle()
+        _process_packages()
+
+    cocotb.simulator.register_start_of_sim_time_callback(init_hdl_objects)
 
 
 def _process_plusargs() -> None:

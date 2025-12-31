@@ -82,7 +82,6 @@ static void pygpi_init_debug() {
     }
 }
 
-static int start_of_sim_time(void *);
 static int end_of_sim_time(void *);
 static void finalize(void *);
 
@@ -171,7 +170,6 @@ extern "C" PYGPI_EXPORT void initialize(void) {
         // LCOV_EXCL_STOP
     }
 
-    gpi_register_start_of_sim_time_callback(start_of_sim_time, nullptr);
     gpi_register_end_of_sim_time_callback(end_of_sim_time, nullptr);
     gpi_register_finalize_callback(finalize, nullptr);
 
@@ -203,6 +201,38 @@ extern "C" PYGPI_EXPORT void initialize(void) {
             sleep_time, getpid());
         sleep((unsigned int)sleep_time);
     }
+
+    PYGPI_LOG_TRACE("GPI Start Sim => [ PYGPI Start ]");
+    DEFER(PYGPI_LOG_TRACE("[ PYGPI Start ] => GPI Start Sim"));
+
+    c_to_python();
+    DEFER(python_to_c());
+
+    // Ensure that the current thread is ready to call the Python C API
+    auto gstate = PyGILState_Ensure();
+    DEFER(PyGILState_Release(gstate));
+
+    auto entry_utility_module = PyImport_ImportModule("pygpi.entry");
+    // LCOV_EXCL_START
+    if (!entry_utility_module) {
+        PyErr_Print();
+        return;
+    }
+    // LCOV_EXCL_STOP
+    DEFER(Py_DECREF(entry_utility_module));
+
+    auto cocotb_retval =
+        PyObject_CallMethod(entry_utility_module, "load_entry", nullptr);
+    if (!cocotb_retval) {
+        // Printing a SystemExit calls exit(1), which we don't want.
+        if (!PyErr_ExceptionMatches(PyExc_SystemExit)) {
+            PyErr_Print();
+        }
+        // Clear error so re-entering Python doesn't fail.
+        PyErr_Clear();
+        return;
+    }
+    Py_DECREF(cocotb_retval);
 }
 
 static void finalize(void *) {
@@ -220,51 +250,6 @@ static void finalize(void *) {
         Py_Finalize();
         python_to_c();
     }
-}
-
-static int start_of_sim_time(void *) {
-    PYGPI_LOG_TRACE("GPI Start Sim => [ PYGPI Start ]");
-    DEFER(PYGPI_LOG_TRACE("[ PYGPI Start ] => GPI Start Sim"));
-
-    // Check that we are not already initialized
-    if (embed_init_called) {
-        // LCOV_EXCL_START
-        PYGPI_LOG_ERROR("PyGPI library initialized again!");
-        return -1;
-        // LCOV_EXCL_STOP
-    }
-    embed_init_called = 1;
-
-    // Ensure that the current thread is ready to call the Python C API
-    auto gstate = PyGILState_Ensure();
-    DEFER(PyGILState_Release(gstate));
-
-    c_to_python();
-    DEFER(python_to_c());
-
-    auto entry_utility_module = PyImport_ImportModule("pygpi.entry");
-    if (!entry_utility_module) {
-        // LCOV_EXCL_START
-        PyErr_Print();
-        return -1;
-        // LCOV_EXCL_STOP
-    }
-    DEFER(Py_DECREF(entry_utility_module));
-
-    auto cocotb_retval =
-        PyObject_CallMethod(entry_utility_module, "load_entry", nullptr);
-    if (!cocotb_retval) {
-        // Printing a SystemExit calls exit(1), which we don't want.
-        if (!PyErr_ExceptionMatches(PyExc_SystemExit)) {
-            PyErr_Print();
-        }
-        // Clear error so re-entering Python doesn't fail.
-        PyErr_Clear();
-        return -1;
-    }
-    Py_DECREF(cocotb_retval);
-
-    return 0;
 }
 
 static int end_of_sim_time(void *) {

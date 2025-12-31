@@ -26,6 +26,7 @@ from typing import Any, Callable
 import cocotb
 import cocotb._event_loop
 import cocotb._shutdown as shutdown
+import cocotb.simulator
 from cocotb import logging as cocotb_logging
 from cocotb import simulator
 from cocotb._base_triggers import Trigger
@@ -910,50 +911,55 @@ _manager_inst: RegressionManager
 """The global regression manager instance."""
 
 
-def _run_regression() -> None:
+def _init_regression() -> None:
     """Setup and run a regression."""
 
     global _manager_inst
     _manager_inst = RegressionManager()
 
-    # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.
-    # Add it back because users expect to be able to import files in their test directory.
-    sys.path.insert(0, "")
+    def run_regression() -> None:
+        # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.
+        # Add it back because users expect to be able to import files in their test directory.
+        sys.path.insert(0, "")
 
-    # From https://www.python.org/dev/peps/pep-0565/#recommended-filter-settings-for-test-runners
-    # If the user doesn't want to see these, they can always change the global
-    # warning settings in their test module.
-    if not sys.warnoptions:
-        warnings.simplefilter("default")
+        # From https://www.python.org/dev/peps/pep-0565/#recommended-filter-settings-for-test-runners
+        # If the user doesn't want to see these, they can always change the global
+        # warning settings in their test module.
+        if not sys.warnoptions:
+            warnings.simplefilter("default")
 
-    # discover tests
-    module_str = os.getenv("COCOTB_TEST_MODULES", "")
-    if not module_str:
-        raise RuntimeError(
-            "Environment variable COCOTB_TEST_MODULES, which defines the module(s) to execute, is not defined or empty."
-        )
-    modules = [s.strip() for s in module_str.split(",") if s.strip()]
-    _manager_inst.setup_pytest_assertion_rewriting()
-    _manager_inst.discover_tests(*modules)
+        # discover tests
+        module_str = os.getenv("COCOTB_TEST_MODULES", "")
+        if not module_str:
+            raise RuntimeError(
+                "Environment variable COCOTB_TEST_MODULES, which defines the module(s) to execute, is not defined or empty."
+            )
+        modules = [s.strip() for s in module_str.split(",") if s.strip()]
+        _manager_inst.setup_pytest_assertion_rewriting()
+        _manager_inst.discover_tests(*modules)
 
-    # filter tests
-    testcase_str = os.getenv("COCOTB_TESTCASE", "").strip()
-    test_filter_str = os.getenv("COCOTB_TEST_FILTER", "").strip()
-    if testcase_str and test_filter_str:
-        raise RuntimeError("Specify only one of COCOTB_TESTCASE or COCOTB_TEST_FILTER")
-    elif testcase_str:
-        warnings.warn(
-            "COCOTB_TESTCASE is deprecated in favor of COCOTB_TEST_FILTER",
-            DeprecationWarning,
-            stacklevel=1,
-        )
-        filters = [f"{s.strip()}$" for s in testcase_str.split(",") if s.strip()]
-        _manager_inst.add_filters(*filters)
-        _manager_inst.set_mode(RegressionMode.TESTCASE)
-    elif test_filter_str:
-        _manager_inst.add_filters(test_filter_str)
-        _manager_inst.set_mode(RegressionMode.TESTCASE)
+        # filter tests
+        testcase_str = os.getenv("COCOTB_TESTCASE", "").strip()
+        test_filter_str = os.getenv("COCOTB_TEST_FILTER", "").strip()
+        if testcase_str and test_filter_str:
+            raise RuntimeError(
+                "Specify only one of COCOTB_TESTCASE or COCOTB_TEST_FILTER"
+            )
+        elif testcase_str:
+            warnings.warn(
+                "COCOTB_TESTCASE is deprecated in favor of COCOTB_TEST_FILTER",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+            filters = [f"{s.strip()}$" for s in testcase_str.split(",") if s.strip()]
+            _manager_inst.add_filters(*filters)
+            _manager_inst.set_mode(RegressionMode.TESTCASE)
+        elif test_filter_str:
+            _manager_inst.add_filters(test_filter_str)
+            _manager_inst.set_mode(RegressionMode.TESTCASE)
 
-    # start Regression Manager
-    _manager_inst.start_regression()
-    shutdown.register(_manager_inst._on_sim_end)
+        # start Regression Manager
+        _manager_inst.start_regression()
+        shutdown.register(_manager_inst._on_sim_end)
+
+    cocotb.simulator.register_start_of_sim_time_callback(run_regression)
