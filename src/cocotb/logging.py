@@ -195,7 +195,7 @@ def _setup_gpi_logger() -> None:
     simulator.initialize_logger(_log_from_c, logging.getLogger)
 
 
-def _configure(_: object) -> None:
+def _configure() -> None:
     """Configure basic logging."""
     reduced_log_fmt = True
     try:

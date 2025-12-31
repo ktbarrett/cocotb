@@ -14,7 +14,7 @@ from cocotb_tools.pytest import env
 from cocotb_tools.pytest.regression import RegressionManager
 
 
-def run_regression(argv: list[str]) -> None:
+def run_regression() -> None:
     """Run regression using pytest as regression manager for cocotb tests."""
 
     # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.

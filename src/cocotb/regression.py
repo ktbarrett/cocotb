@@ -910,7 +910,7 @@ _manager_inst: RegressionManager
 """The global regression manager instance."""
 
 
-def _run_regression(_: object) -> None:
+def _run_regression() -> None:
     """Setup and run a regression."""
 
     global _manager_inst

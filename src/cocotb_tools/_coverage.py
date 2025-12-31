@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 
 
-def start_cocotb_library_coverage(_: object) -> None:  # pragma: no cover
+def start_cocotb_library_coverage() -> None:  # pragma: no cover
     if "COCOTB_LIBRARY_COVERAGE" not in os.environ:
         return
     try:
