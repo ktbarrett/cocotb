@@ -423,6 +423,7 @@ class FliImpl : public GpiImplInterface {
     void get_sim_precision(int32_t *precision) override;
     const char *get_simulator_product() override;
     const char *get_simulator_version() override;
+    int get_simulator_args(int *argc, const char *const **argv) override;
 
     /* Hierarchy related */
     GpiObjHdl *get_child_by_name(const std::string &name,
@@ -465,6 +466,13 @@ class FliImpl : public GpiImplInterface {
     // We store the shutdown callback handle here so sim_end() can remove() it
     // if it's called.
     FliShutdownCbHdl *m_sim_finish_cb;
+
+    // Cache simulator info
+    std::string m_product;
+    std::string m_version;
+    int m_argc;
+    std::vector<std::string> m_argv_storage;
+    char const **m_argv;
 
     // Caches for each type of callback handle. This must be associated with the
     // FliImpl rather than be static member of the callback handle type because
