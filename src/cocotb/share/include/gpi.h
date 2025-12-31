@@ -470,7 +470,7 @@ GPI_EXPORT int gpi_register_start_of_sim_time_callback(int (*cb)(void *),
  * @param cb_data   Pointer to user data to be passed to callback function.
  * @return          Zero on success, non-zero on failure.
  */
-GPI_EXPORT int gpi_register_end_of_sim_time_callback(void (*cb)(void *),
+GPI_EXPORT int gpi_register_end_of_sim_time_callback(int (*cb)(void *),
                                                      void *cb_data);
 
 /** Remove callback.

@@ -83,7 +83,7 @@ static void pygpi_init_debug() {
 }
 
 static int start_of_sim_time(void *);
-static void end_of_sim_time(void *);
+static int end_of_sim_time(void *);
 
 extern "C" PYGPI_EXPORT void initialize(void) {
     pygpi_init_debug();
@@ -263,7 +263,7 @@ static int start_of_sim_time(void *) {
     return 0;
 }
 
-static void end_of_sim_time(void *) {
+static int end_of_sim_time(void *) {
     PYGPI_LOG_TRACE("GPI End Sim => [ PYGPI End ]");
     DEFER(PYGPI_LOG_TRACE("[ PYGPI End ] => GPI End Sim"));
 
@@ -290,4 +290,5 @@ static void end_of_sim_time(void *) {
 
     // Clean up the PyGPI before exiting.
     finalize();
+    return 0;
 }
