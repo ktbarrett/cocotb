@@ -20,7 +20,7 @@ using namespace std;
 
 static vector<GpiImplInterface *> registered_impls;
 static vector<std::pair<int (*)(void *), void *>> start_of_sim_time_cbs;
-static vector<std::pair<void (*)(void *), void *>> end_of_sim_time_cbs;
+static vector<std::pair<int (*)(void *), void *>> end_of_sim_time_cbs;
 static vector<std::pair<void (*)(void *), void *>> finalize_cbs;
 
 class GpiHandleStore {
@@ -746,7 +746,7 @@ gpi_cb_hdl gpi_register_start_of_sim_time_callback(int (*cb)(void *),
     return 0;
 }
 
-gpi_cb_hdl gpi_register_end_of_sim_time_callback(void (*cb)(void *),
+gpi_cb_hdl gpi_register_end_of_sim_time_callback(int (*cb)(void *),
                                                  void *cb_data) {
     end_of_sim_time_cbs.push_back(std::make_pair(cb, cb_data));
     return 0;
