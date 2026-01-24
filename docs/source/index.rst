@@ -86,7 +86,7 @@ See `cocotb.org <https://cocotb.org>`_ for more details.
    :hidden:
 
    install
-   quickstart
+   first_steps
    writing_testbenches
    runner
    coroutines

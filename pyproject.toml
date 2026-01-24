@@ -142,13 +142,6 @@ ignore = [
     "TC003",   # typing-only standard library import
 ]
 
-[tool.ruff.lint.per-file-ignores]
-# necessary because of how file is included into documentation
-"examples/doc_examples/quickstart/test_my_design.py" = [
-    "E402",
-    "F811",
-]
-
 [tool.ruff.lint.isort]
 known-first-party = [
     "cocotb",
