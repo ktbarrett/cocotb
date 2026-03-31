@@ -276,7 +276,7 @@ If you are using Icarus, this will be called ``sim_build/counter.fst`` by defaul
 We can pull up these waveforms in any waveform viewer to see our clock running.
 Below is an example of the waveform using the `surfer extension<https://marketplace.visualstudio.com/items?itemName=surfer-project.surfer>`_ in Visual Studio Code.
 
-.. image:: images/clock.png
+.. wavedrom:: diagrams/wavedrom/test_clock.json
 
 Concurrency
 -----------
@@ -338,7 +338,7 @@ but we can also :keyword:`!await` on them which will block the caller until the 
 If we run the test and pull up the waveforms, we will see our initial value of ``10`` be loaded into the counter,
 and then the counter increments from there on every rising edge of the clock for the next 100 cycles.
 
-.. image:: images/counting.png
+.. wavedrom:: diagrams/wavedrom/test_edge_trigger.json
 
 Self-Checking Tests
 -------------------
