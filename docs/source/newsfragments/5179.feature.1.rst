@@ -1,0 +1,1 @@
+:class:`~cocotb.handle.LogicArrayObject` now supports accessing named fields of packed structures using attribute syntax (``dut.my_struct.field``) or index syntax (``dut.my_struct["field"]``).

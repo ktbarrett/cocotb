@@ -8,6 +8,7 @@ import os
 import re
 
 import cocotb
+from cocotb.handle import LogicObject
 from cocotb.triggers import Timer
 from cocotb_tools.sim_versions import RivieraVersion
 
@@ -30,6 +31,49 @@ async def test_packed_struct_format(dut):
     assert re.fullmatch(
         r"LogicArray\('[0XZ]{3}', Range\(2, 'downto', 0\)\)", repr(dut.my_struct.value)
     )
+
+
+@cocotb.xfail(
+    SIM_NAME.startswith("icarus"),
+    raises=AttributeError,
+    reason="Icarus can't find packed struct field by name.",
+)
+@cocotb.xfail(
+    SIM_NAME.startswith("verilator"),
+    raises=AttributeError,
+    reason="Verilator can't find packed struct field by name.",
+)
+@cocotb.test()
+async def test_packed_struct_field_access(dut):
+    """Test accessing fields of a packed struct by attribute and index syntax."""
+
+    # attribute syntax
+    assert isinstance(dut.my_struct.val_a, LogicObject)
+    assert isinstance(dut.my_struct.val_b, LogicObject)
+
+    # index syntax (also exercises a name that collides with the `.value`
+    # property on LogicArrayObject; for such fields attribute syntax cannot
+    # be used and index syntax is required)
+    assert isinstance(dut.my_struct["val_a"], LogicObject)
+    assert isinstance(dut.my_struct["value"], LogicObject)
+
+    # caching: repeated access returns the same handle
+    assert dut.my_struct.val_a is dut.my_struct.val_a
+    assert dut.my_struct["val_a"] is dut.my_struct.val_a
+
+    # missing field raises AttributeError / KeyError
+    try:
+        dut.my_struct.does_not_exist
+    except AttributeError:
+        pass
+    else:
+        raise AssertionError("expected AttributeError")
+    try:
+        dut.my_struct["does_not_exist"]
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("expected KeyError")
 
 
 # Riviera-PRO 2024.04 crashes on this testcase (gh-3936)

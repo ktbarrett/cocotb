@@ -1250,7 +1250,7 @@ class LogicArrayObject(
     _RangeableObjectMixin,
     _SignednessObjectMixin,
 ):
-    """A logic array simulation object.
+    r"""A logic array simulation object.
 
     Inherits from :class:`SimHandleBase` and :class:`ValueObjectBase`.
 
@@ -1274,11 +1274,22 @@ class LogicArrayObject(
     .. code-block:: python
 
         bit_0 = dut.my_vec[0]
+
+    If the object is a packed structure,
+    its named fields can be accessed using either attribute syntax or index syntax with the field name.
+
+    .. code-block:: python
+
+        dut.my_struct.field_a  # attribute syntax
+        dut.my_struct["field_a"]  # index syntax
+
+    .. note::
+        Field names that collide with attributes of this class (such as ``value``) must be accessed using the index syntax.
     """
 
     def __init__(self, handle: cocotb.simulator.sim_obj, path: str | None) -> None:
         super().__init__(handle, path)
-        self._sub_handles: dict[int, SimHandleBase] = {}
+        self._sub_handles: dict[int | str, SimHandleBase] = {}
 
     def _set_value(
         self,
@@ -1388,9 +1399,14 @@ class LogicArrayObject(
         # and this object needs to support multi-dimensional packed arrays.
         return self._handle.get_num_elems()
 
-    def __getitem__(self, key: int) -> LogicObject:
+    def __getitem__(self, key: int | str) -> SimHandleBase:
+        if isinstance(key, str):
+            sub = self._get_field(key)
+            if sub is None:
+                raise KeyError(f"{self._path} contains no child object named {key}")
+            return sub
         try:
-            return cast("LogicObject", self._sub_handles[key])
+            return self._sub_handles[key]
         except KeyError:
             pass
         handle = self._handle.get_handle_by_index(key)
@@ -1398,6 +1414,29 @@ class LogicArrayObject(
             raise IndexError(f"{self._path} contains no object at index {key}")
         sub = LogicObject(handle, f"{self._path}[{key}]")
         self._sub_handles[key] = sub
+        return sub
+
+    def __getattr__(self, name: str) -> SimHandleBase:
+        if name.startswith("_"):
+            return object.__getattribute__(self, name)
+        sub = self._get_field(name)
+        if sub is None:
+            raise AttributeError(f"{self._path} contains no child object named {name}")
+        return sub
+
+    def _get_field(self, name: str) -> SimHandleBase | None:
+        try:
+            return self._sub_handles[name]
+        except KeyError:
+            pass
+        new_handle = self._handle.get_handle_by_name(name, GPIDiscovery.AUTO)
+        if new_handle is None:
+            return None
+        try:
+            sub = _make_sim_object(new_handle, f"{self._path}.{name}")
+        except NotImplementedError:
+            return None
+        self._sub_handles[name] = sub
         return sub
 
     @cached_property

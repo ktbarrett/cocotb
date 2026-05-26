@@ -16,14 +16,14 @@ typedef struct
     logic b_out;
 } test_struct_unpacked;
 
+`endif  // `ifndef __ICARUS__
+
 typedef struct packed
 {
     logic val_a;
     logic val_b;
     logic value;
 } test_struct_packed;
-
-`endif  // `ifndef __ICARUS__
 
 interface TestInterface ();
 
@@ -54,9 +54,9 @@ module sample_module #(
     output real                                 stream_out_real,
     output integer                              stream_out_int,
     input  test_struct_unpacked                 inout_if,
-    input  test_struct_packed                   my_struct,
     input  string                               stream_in_string,
 `endif  // `ifndef __ICARUS__
+    input  test_struct_packed                   my_struct,
     input  [7:0]                                stream_in_data,
     input  [31:0]                               stream_in_data_dword,
     input  [38:0]                               stream_in_data_39bit,
