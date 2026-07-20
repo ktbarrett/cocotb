@@ -30,7 +30,7 @@ static int32_t handle_vpi_callback_(VpiCbHdl *cb_hdl) {
     }
 
     if (error) {
-        gpi_end_of_sim_time();
+        gpi_finish();
     }
 
     return error ? -1 : 0;
@@ -64,6 +64,15 @@ int32_t handle_vpi_callback(p_cb_data cb_data) {
         reacting = false;
     }
 #endif
+
+    // Ensure shutdown callbacks are called if the simulation is finalizing
+    // before the shutdown callback is called. Also call into the simulator to
+    // finish it.
+    if (gpi_is_finalizing() && cb_data->reason != cbEndOfSimulation) {
+        gpi_end_of_sim_time();
+        gpi_finish_sim();
+    }
+
     GPI_TO_SIM(VPI, cb_data->user_data);
     return ret;
 }

@@ -21,7 +21,6 @@ using namespace std;
 static vector<GpiImplInterface *> registered_impls;
 static vector<std::pair<int (*)(void *), void *>> start_of_sim_time_cbs;
 static vector<std::pair<void (*)(void *), void *>> end_of_sim_time_cbs;
-static vector<std::pair<void (*)(void *), void *>> finalize_cbs;
 
 class GpiHandleStore {
   public:
@@ -111,33 +110,19 @@ void gpi_end_of_sim_time() {
         cb_info.first(cb_info.second);
         LOG_TRACE("User End callback => [ GPI End Sim ]");
     }
-    // always request simulation termination at end_of_sim_time
-    gpi_finish();
-}
-
-void gpi_finish() {
-    if (!gpi_finalizing) {
-        registered_impls[0]->sim_end();
-        gpi_finalizing = true;
-    }
-}
-
-void gpi_finalize(void) {
+    // Finalize the GPI before exiting.
     CLEAR_STORE();
-    for (auto it = finalize_cbs.rbegin(); it != finalize_cbs.rend(); it++) {
-        LOG_TRACE("[ GPI Finalize ] => User Finalize callback");
-        it->first(it->second);
-        LOG_TRACE("User Finalize callback => [ GPI Finalize ]");
-    }
 }
 
-void gpi_check_cleanup(void) {
-    if (gpi_finalizing) {
-        gpi_finalize();
-    }
-}
+void gpi_finish() { gpi_finalizing = true; }
 
 bool gpi_is_finalizing(void) { return gpi_finalizing; }
+
+void gpi_finish_sim() {
+    // Only called if a user called gpi_finish() before the end of sim time
+    // callback fired.
+    registered_impls[0]->sim_end();
+}
 
 static void gpi_load_libs(std::vector<std::string> to_load) {
     std::vector<std::string>::iterator iter;
@@ -751,11 +736,6 @@ int gpi_register_start_of_sim_time_callback(int (*cb)(void *), void *cb_data) {
 
 int gpi_register_end_of_sim_time_callback(void (*cb)(void *), void *cb_data) {
     end_of_sim_time_cbs.push_back(std::make_pair(cb, cb_data));
-    return 0;
-}
-
-int gpi_register_finalize_callback(void (*cb)(void *), void *cb_data) {
-    finalize_cbs.push_back(std::make_pair(cb, cb_data));
     return 0;
 }
 

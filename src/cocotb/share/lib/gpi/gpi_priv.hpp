@@ -271,7 +271,7 @@ GPI_EXPORT void gpi_start_of_sim_time();
 GPI_EXPORT void gpi_end_of_sim_time();
 
 GPI_EXPORT void gpi_entry_point();
-GPI_EXPORT void gpi_check_cleanup();
+GPI_EXPORT void gpi_finish_sim();
 GPI_EXPORT bool gpi_is_finalizing();
 GPI_EXPORT void gpi_init_logging_and_debug();
 
@@ -285,11 +285,7 @@ void *utils_dyn_sym(void *handle, const char *sym_name);
 #define SIM_TO_GPI(impl, ptr, cb_reason) \
     LOG_TRACE("Sim => [ " xstr(impl) " %p for %s ]", ptr, cb_reason)
 
-#define GPI_TO_SIM(impl, ptr)                           \
-    do {                                                \
-        gpi_check_cleanup();                            \
-        LOG_TRACE("[ " xstr(impl) " %p ] => Sim", ptr); \
-    } while (0)
+#define GPI_TO_SIM(impl, ptr) LOG_TRACE("[ " xstr(impl) " %p ] => Sim", ptr)
 
 typedef void (*layer_entry_func)();
 

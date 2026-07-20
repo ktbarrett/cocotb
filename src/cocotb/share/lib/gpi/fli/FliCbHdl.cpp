@@ -32,7 +32,12 @@ void handle_fli_callback(void *data) {
     }
 
     if (error) {
+        gpi_finish();
+    }
+
+    if (gpi_is_finalizing() && !cb_hdl->is_shutdown_cb()) {
         gpi_end_of_sim_time();
+        gpi_finish_sim();
     }
 
     GPI_TO_SIM(FLI, data);

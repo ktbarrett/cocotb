@@ -84,7 +84,6 @@ static void pygpi_init_debug() {
 
 static int start_of_sim_time(void *);
 static void end_of_sim_time(void *);
-static void finalize(void *);
 
 extern "C" PYGPI_EXPORT void initialize(void) {
     pygpi_init_debug();
@@ -173,7 +172,6 @@ extern "C" PYGPI_EXPORT void initialize(void) {
 
     gpi_register_start_of_sim_time_callback(start_of_sim_time, nullptr);
     gpi_register_end_of_sim_time_callback(end_of_sim_time, nullptr);
-    gpi_register_finalize_callback(finalize, nullptr);
 
     /* Before returning we check if the user wants pause the simulator thread
        such that they can attach */
@@ -205,9 +203,7 @@ extern "C" PYGPI_EXPORT void initialize(void) {
     }
 }
 
-static void finalize(void *) {
-    PYGPI_LOG_TRACE("GPI Finalize => [ PYGPI Finalize ]");
-    DEFER(PYGPI_LOG_TRACE("[ PYGPI Finalize ] => GPI Finalize"));
+static void finalize() {
     // If initialization fails, this may be called twice:
     // Before the initial callback returns and in the final callback.
     // So we check if Python is still initialized before doing cleanup.
@@ -272,7 +268,6 @@ static void end_of_sim_time(void *) {
     DEFER(PYGPI_LOG_TRACE("[ PYGPI End ] => GPI End Sim"));
 
     /* Indicate to the upper layer that a sim event occurred */
-
     if (pEventFn) {
         PyGILState_STATE gstate;
         c_to_python();
@@ -292,4 +287,7 @@ static void end_of_sim_time(void *) {
         PyGILState_Release(gstate);
         python_to_c();
     }
+
+    // Clean up the PyGPI before exiting.
+    finalize();
 }

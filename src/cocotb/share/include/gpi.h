@@ -473,21 +473,6 @@ GPI_EXPORT int gpi_register_start_of_sim_time_callback(int (*cb)(void *),
 GPI_EXPORT int gpi_register_end_of_sim_time_callback(void (*cb)(void *),
                                                      void *cb_data);
 
-/** Type of a GPI finalization callback.
- *
- * @param cb_data   Pointer to user data to be passed to callback function.
- */
-typedef void (*gpi_finalize_callback)(void *cb_data);
-
-/** Register a callback to run just before the GPI terminates.
- *
- * @param cb        Callback function pointer.
- * @param cb_data   Pointer to user data to be passed to callback function.
- * @return          Handle to callback object.
- */
-GPI_EXPORT int gpi_register_finalize_callback(gpi_finalize_callback cb,
-                                              void *cb_data);
-
 /** Remove callback.
  *
  * The callback will not fire after this function is called.

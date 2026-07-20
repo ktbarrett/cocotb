@@ -31,7 +31,15 @@ void handle_vhpi_callback(const vhpiCbDataT *cb_data) {
     }
 
     if (error) {
+        gpi_finish();
+    }
+
+    // Ensure shutdown callbacks are called if the simulation is finalizing
+    // before the shutdown callback is called. Also call into the simulator to
+    // finish it.
+    if (gpi_is_finalizing() && cb_data->reason != vhpiCbEndOfSimulation) {
         gpi_end_of_sim_time();
+        gpi_finish_sim();
     }
 
     GPI_TO_SIM(VHPI, cb_data->user_data);
