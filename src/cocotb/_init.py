@@ -61,11 +61,14 @@ def init_package_from_simulation() -> None:
     log.info("Running on %s version %s", cocotb.SIM_NAME, cocotb.SIM_VERSION)
 
     def init_hdl_objects() -> None:
+        import cocotb.regression  # noqa: PLC0415
+
         cocotb.simtime._init()
         _setup_root_handle()
         _process_packages()
+        cocotb.regression._run_regression()
 
-    cocotb.simulator.register_start_of_sim_time_callback(init_hdl_objects)
+    cocotb.simulator.register_start_of_sim_callback(init_hdl_objects)
 
 
 def _process_plusargs() -> None:

@@ -36,7 +36,6 @@ void handle_fli_callback(void *data) {
     }
 
     if (gpi_is_finalizing() && !cb_hdl->is_shutdown_cb()) {
-        gpi_end_of_sim_time();
         gpi_finish_sim();
     }
 

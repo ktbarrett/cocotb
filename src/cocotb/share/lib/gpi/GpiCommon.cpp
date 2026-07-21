@@ -19,8 +19,6 @@
 using namespace std;
 
 static vector<GpiImplInterface *> registered_impls;
-static vector<std::pair<int (*)(void *), void *>> start_of_sim_time_cbs;
-static vector<std::pair<int (*)(void *), void *>> end_of_sim_time_cbs;
 
 class GpiHandleStore {
   public:
@@ -89,27 +87,6 @@ int gpi_register_impl(GpiImplInterface *func_tbl) {
 }
 
 bool gpi_has_registered_impl() { return registered_impls.size() > 0; }
-
-void gpi_start_of_sim_time() {
-    for (auto &cb_info : start_of_sim_time_cbs) {
-        // start_of_sime_time should never fail, this should be moved to
-        // gpi_load_users, as should the (argc,argv)
-        LOG_TRACE("[ GPI Start Sim ] => User Start callback");
-        int error = cb_info.first(cb_info.second);
-        LOG_TRACE("User Start callback => [ GPI Start Sim ]");
-        if (error) {
-            gpi_end_of_sim_time();
-        }
-    }
-}
-
-void gpi_end_of_sim_time() {
-    for (auto &cb_info : end_of_sim_time_cbs) {
-        LOG_TRACE("[ GPI End Sim ] => User End callback");
-        cb_info.first(cb_info.second);
-        LOG_TRACE("User End callback => [ GPI End Sim ]");
-    }
-}
 
 void gpi_finish() { gpi_finalizing = true; }
 
@@ -726,14 +703,32 @@ const char *GpiImplInterface::get_name_c() { return m_name.c_str(); }
 
 const string &GpiImplInterface::get_name_s() { return m_name; }
 
-int gpi_register_start_of_sim_time_callback(int (*cb)(void *), void *cb_data) {
-    start_of_sim_time_cbs.push_back(std::make_pair(cb, cb_data));
-    return 0;
+gpi_cb_hdl gpi_register_start_of_sim_callback(int (*gpi_function)(void *),
+                                              void *gpi_cb_data) {
+    // It should not matter which implementation we use for this so just pick
+    // the first one
+    GpiCbHdl *cb_hdl = registered_impls[0]->register_start_of_sim_callback(
+        gpi_function, gpi_cb_data);
+    if (!cb_hdl) {
+        LOG_ERROR("Failed to register a start of sim callback");
+        return NULL;
+    } else {
+        return cb_hdl;
+    }
 }
 
-int gpi_register_end_of_sim_time_callback(int (*cb)(void *), void *cb_data) {
-    end_of_sim_time_cbs.push_back(std::make_pair(cb, cb_data));
-    return 0;
+gpi_cb_hdl gpi_register_end_of_sim_callback(int (*gpi_function)(void *),
+                                            void *gpi_cb_data) {
+    // It should not matter which implementation we use for this so just pick
+    // the first one
+    GpiCbHdl *cb_hdl = registered_impls[0]->register_end_of_sim_callback(
+        gpi_function, gpi_cb_data);
+    if (!cb_hdl) {
+        LOG_ERROR("Failed to register an end of sim callback");
+        return NULL;
+    } else {
+        return cb_hdl;
+    }
 }
 
 int gpi_get_simulator_args(int *argc, char const *const **argv) {

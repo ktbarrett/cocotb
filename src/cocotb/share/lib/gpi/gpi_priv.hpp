@@ -256,6 +256,10 @@ class GPI_EXPORT GpiImplInterface {
                                                  void *gpi_cb_data) = 0;
     virtual GpiCbHdl *register_readwrite_callback(int (*gpi_function)(void *),
                                                   void *gpi_cb_data) = 0;
+    virtual GpiCbHdl *register_start_of_sim_callback(
+        int (*gpi_function)(void *), void *gpi_cb_data) = 0;
+    virtual GpiCbHdl *register_end_of_sim_callback(int (*gpi_function)(void *),
+                                                   void *gpi_cb_data) = 0;
 
   private:
     std::string m_name;
@@ -263,12 +267,6 @@ class GPI_EXPORT GpiImplInterface {
 
 /* Called from implementation layers back up the stack */
 GPI_EXPORT int gpi_register_impl(GpiImplInterface *func_tbl);
-
-// GpiImpls are currently expected to register single callbacks with the
-// interface for the start and end of simulation time. These functions are
-// called by the GpiImpls. The GPI layer will do the callback muxing.
-GPI_EXPORT void gpi_start_of_sim_time();
-GPI_EXPORT void gpi_end_of_sim_time();
 
 GPI_EXPORT void gpi_entry_point();
 GPI_EXPORT void gpi_finish_sim();

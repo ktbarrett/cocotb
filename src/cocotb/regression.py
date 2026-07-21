@@ -1175,7 +1175,7 @@ def _setup_regression_manager() -> None:
 
 
 def _init_regression() -> None:
-    """Setup and run a regression."""
+    """Setup the global regression manager."""
 
     # sys.path normally includes "" (the current directory), but does not appear to when Python is embedded.
     # Add it back because users expect to be able to import files in their test directory.
@@ -1189,11 +1189,10 @@ def _init_regression() -> None:
 
     _setup_regression_manager()
 
-    def run_regression() -> None:
-        if _env.get_bool("COCOTB_LIST_TESTS", False):
-            _manager_inst.list_tests()
-        else:
-            _manager_inst.start_regression()
-            shutdown.register(_manager_inst._on_sim_end)
 
-    cocotb.simulator.register_start_of_sim_time_callback(run_regression)
+def _run_regression() -> None:
+    if _env.get_bool("COCOTB_LIST_TESTS", False):
+        _manager_inst.list_tests()
+    else:
+        _manager_inst.start_regression()
+        shutdown.register(_manager_inst._on_sim_end)
