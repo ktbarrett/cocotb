@@ -232,10 +232,7 @@ extern "C" PYGPI_EXPORT void initialize(void) {
     Py_DECREF(cocotb_retval);
 }
 
-static void finalize() {
-    // If initialization fails, this may be called twice:
-    // Before the initial callback returns and in the final callback.
-    // So we check if Python is still initialized before doing cleanup.
+GLBL_DEFER({
     if (Py_IsInitialized()) {
         c_to_python();
         PyGILState_Ensure();  // Don't save state as we are calling Py_Finalize
@@ -245,7 +242,7 @@ static void finalize() {
         Py_Finalize();
         python_to_c();
     }
-}
+});
 
 static int end_of_sim_time(void *) {
     PYGPI_LOG_TRACE("GPI End Sim => [ PYGPI End ]");
@@ -271,8 +268,5 @@ static int end_of_sim_time(void *) {
         PyGILState_Release(gstate);
         python_to_c();
     }
-
-    // Clean up the PyGPI before exiting.
-    finalize();
     return 0;
 }

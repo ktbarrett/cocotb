@@ -29,5 +29,7 @@ constexpr Deferable<F> make_deferable(F f) {
 #define DEFER0(a, b) DEFER1(a, b)
 #define DEFER(statement) \
     auto DEFER0(_defer, __COUNTER__) = make_deferable([&]() { statement; });
+#define GLBL_DEFER(statement) \
+    auto DEFER0(_glbl_defer, __COUNTER__) = make_deferable([]() { statement; });
 
 #endif /* COCOTB_UTILS_H_ */

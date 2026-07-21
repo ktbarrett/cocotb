@@ -62,7 +62,6 @@ class GpiHandleStore {
 static GpiHandleStore unique_handles;
 
 #define CHECK_AND_STORE(_x) unique_handles.check_and_store(_x)
-#define CLEAR_STORE() unique_handles.clear()
 
 static bool gpi_finalizing = false;
 
@@ -110,8 +109,6 @@ void gpi_end_of_sim_time() {
         cb_info.first(cb_info.second);
         LOG_TRACE("User End callback => [ GPI End Sim ]");
     }
-    // Finalize the GPI before exiting.
-    CLEAR_STORE();
 }
 
 void gpi_finish() { gpi_finalizing = true; }
