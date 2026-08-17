@@ -11,4 +11,4 @@ override_for_this_test:
 include ../../designs/sample_module/Makefile
 
 COCOTB_TEST_MODULES = test_simple
-export GPI_EXTRA = invalid
+export GPI_IMPL = invalid
