@@ -311,8 +311,10 @@ GpiObjHdl *VpiImpl::create_gpi_obj_from_handle(vpiHandle new_hdl,
         case vpiGenScope:
         case vpiGenScopeArray: {
             std::string hdl_name = vpi_get_str(vpiName, new_hdl);
+            const bool is_normalized_index =
+                !name.empty() && name.front() == '[' && name.back() == ']';
 
-            if (hdl_name != name) {
+            if (hdl_name != name && !is_normalized_index) {
                 LOG_DEBUG("Found pseudo-region %s (hdl_name=%s but name=%s)",
                           fq_name.c_str(), hdl_name.c_str(), name.c_str());
                 new_obj = new VpiObjHdl(this, new_hdl, GPI_GENARRAY);

@@ -289,13 +289,6 @@ async def test_discover_all(dut):
 
     if cocotb.SIM_NAME.lower().startswith("ghdl"):
         pass_total = 56
-    elif (
-        LANGUAGE in ["vhdl"]
-        and cocotb.SIM_NAME.lower().startswith("modelsim")
-        and os.environ["VHDL_GPI_INTERFACE"] == "vhpi"
-    ):
-        # VHPI finds the array_module.asc_gen and array_module.desc_gen more than once =/
-        pass_total = 308
     elif LANGUAGE in ["verilog"] and cocotb.SIM_NAME.lower().startswith("riviera"):
         # Applies to Riviera-PRO 2019.10 and newer.
         pass_total = 180

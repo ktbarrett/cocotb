@@ -105,7 +105,14 @@ GpiObjHdl *FliImpl::create_gpi_obj_from_handle(void *hdl,
          */
         std::string rgn_name =
             mti_GetRegionName(static_cast<mtiRegionIdT>(hdl));
-        if (name != rgn_name) {
+        const std::size_t index_begin = rgn_name.rfind('(');
+        const bool normalized_index_name =
+            name.length() >= 2 && name.front() == '[' && name.back() == ']' &&
+            index_begin != std::string::npos && rgn_name.back() == ')' &&
+            name.substr(1, name.length() - 2) ==
+                rgn_name.substr(index_begin + 1,
+                                rgn_name.length() - index_begin - 2);
+        if (name != rgn_name && !normalized_index_name) {
             LOG_DEBUG("Found pseudo-region %s -> %p", fq_name.c_str(), hdl);
             new_obj =
                 new FliObjHdl(this, hdl, GPI_GENARRAY, accType, accFullType);
@@ -371,11 +378,11 @@ GpiObjHdl *FliImpl::get_child_by_index(int32_t index, GpiObjHdl *parent) {
         LOG_DEBUG("Looking for index %d from %s", index,
                   parent->get_name_str());
 
-        snprintf(buff, 14, "(%d)", index);
+        snprintf(buff, 14, "%d", index);
 
         std::string idx = buff;
-        std::string name = parent->get_name() + idx;
-        std::string fq_name = parent->get_fullname() + idx;
+        std::string name = '[' + idx + ']';
+        std::string fq_name = parent->get_fullname() + '(' + idx + ')';
 
         std::vector<char> writable(fq_name.begin(), fq_name.end());
         writable.push_back('\0');
@@ -1007,7 +1014,10 @@ GpiIterator::Status FliIterator::next_handle(std::string &name, GpiObjHdl **hdl,
 
         if (found != std::string::npos) {
             fq_name += name.substr(found);
-            if (obj_type != GPI_GENARRAY) {
+            if (obj_type == GPI_GENARRAY) {
+                name = "[" + name.substr(found + 1, name.length() - found - 2) +
+                       "]";
+            } else {
                 name = name.substr(found + 1);
             }
         } else {

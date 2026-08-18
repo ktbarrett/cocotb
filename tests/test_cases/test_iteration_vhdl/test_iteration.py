@@ -16,17 +16,16 @@ def total_object_count():
     """Return the total object count based on simulator."""
     SIM_NAME = cocotb.SIM_NAME.lower()
 
-    # Questa with VHPI
-    # TODO: Why do we get massively different numbers for Questa/VHPI than for Questa/FLI or VPI?
-    if SIM_NAME.startswith("modelsim") and os.environ["VHDL_GPI_INTERFACE"] == "vhpi":
-        if os.environ.get("COCOTB__QUESTA_MODE", "compat") == "compat":
-            return 5119
-        else:
-            # The QIS/Qrun flow additionally finds
-            # Found dec_viterbi_ent.#IMPLICIT# (<class 'cocotb.handle.IntegerObject'>) and
-            # many instances that look like s__218_3 (<class 'cocotb.handle.LogicObject'>)
-            # Tracked as Siemens issue QSIM-84124.
-            return 5384
+    if (
+        SIM_NAME.startswith("modelsim")
+        and os.environ["VHDL_GPI_INTERFACE"] == "vhpi"
+        and os.environ.get("COCOTB__QUESTA_MODE", "compat") != "compat"
+    ):
+        # The QIS/Qrun flow additionally finds
+        # Found dec_viterbi_ent.#IMPLICIT# (<class 'cocotb.handle.IntegerObject'>) and
+        # many instances that look like s__218_3 (<class 'cocotb.handle.LogicObject'>)
+        # Tracked as Siemens issue QSIM-84124.
+        return 2796
 
     if SIM_NAME.startswith(
         (

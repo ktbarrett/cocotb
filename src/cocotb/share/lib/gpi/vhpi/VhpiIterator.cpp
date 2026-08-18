@@ -237,12 +237,12 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
 
     /*
      * If the parent is not a generate loop, then watch for generate handles and
-     * create the pseudo-region.
+     * create the pseudo-region, regardless of which relationship yielded them.
      *
      * NOTE: Taking advantage of the "caching" to only create one pseudo-region
      * object. Otherwise a list would be required and checked while iterating
      */
-    if (*one2many == vhpiInternalRegions && obj_type != GPI_GENARRAY &&
+    if (obj_type != GPI_GENARRAY &&
         vhpi_get(vhpiKindP, obj) == vhpiForGenerateK) {
         std::string idx_str = c_name;
         std::size_t found = idx_str.rfind(GEN_IDX_SEP_LHS);
@@ -273,6 +273,10 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
 
         if (found != std::string::npos) {
             fq_name += name.substr(found);
+            const std::size_t index_begin = found + sizeof(GEN_IDX_SEP_LHS) - 1;
+            const std::size_t index_length =
+                name.size() - index_begin - sizeof(GEN_IDX_SEP_RHS) + 1;
+            name = "[" + name.substr(index_begin, index_length) + "]";
         } else {
             LOG_WARN("VHPI: Unhandled Sub-Element Format - %s", name.c_str());
             fq_name += "." + name;
