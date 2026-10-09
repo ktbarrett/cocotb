@@ -518,19 +518,28 @@ out:
     return new_obj;
 }
 
-static std::string fully_qualified_name(const std::string &name,
-                                        GpiObjHdl *parent) {
-    std::string fq_name = parent->get_fullname();
-    if (fq_name == ":") {
-        fq_name += name;
-    } else {
-        fq_name += "." + name;
+std::string VhpiImpl::get_simulator_fullname(GpiObjHdl *obj) {
+    // Only the owning interface can query a simulator handle's name.
+    if (!obj->is_this_impl(this)) {
+        return obj->m_impl->get_simulator_fullname(obj);
     }
-#ifdef NVC
-    /* Convert to a canonical form to avoid problems with case insensitivity. */
-    std::transform(fq_name.begin(), fq_name.end(), fq_name.begin(), ::toupper);
-#endif
-    return fq_name;
+
+    vhpiHandleT hdl = obj->get_handle<vhpiHandleT>();
+    std::string fullname = vhpi_get_str(vhpiFullCaseNameP, hdl);
+    if (obj->get_type() == GPI_GENARRAY) {
+        // Generate arrays borrow the containing region's simulator handle.
+        if (!fullname.empty() && fullname.back() != ':') {
+            fullname += fullname.front() == ':' ? ":" : ".";
+        }
+        fullname += obj->get_name();
+    } else if (obj->get_type() == GPI_ARRAY) {
+        // Partially indexed arrays can borrow the unindexed array's handle.
+        std::string name = vhpi_get_str(vhpiCaseNameP, hdl);
+        if (name.length() < obj->get_name().length()) {
+            fullname += obj->get_name().substr(name.length());
+        }
+    }
+    return fullname;
 }
 
 GpiObjHdl *VhpiImpl::get_child_from_handle(void *raw_hdl, GpiObjHdl *parent) {
@@ -545,7 +554,7 @@ GpiObjHdl *VhpiImpl::get_child_from_handle(void *raw_hdl, GpiObjHdl *parent) {
     }
 
     std::string name = c_name;
-    std::string fq_name = fully_qualified_name(name, parent);
+    std::string fq_name = parent->get_fullname() + "." + name;
 
     GpiObjHdl *new_obj = create_gpi_obj_from_handle(new_hdl, name, fq_name);
     if (new_obj == NULL) {
@@ -562,9 +571,22 @@ GpiObjHdl *VhpiImpl::get_child_by_name(const std::string &name,
     vhpiHandleT vhpi_hdl = parent->get_handle<vhpiHandleT>();
 
     vhpiHandleT new_hdl;
-    std::string fq_name = fully_qualified_name(name, parent);
+    std::string fq_name = parent->get_fullname() + "." + name;
+    std::string simulator_name = get_simulator_fullname(parent);
+    if (!simulator_name.empty() && simulator_name.back() != ':') {
+        simulator_name +=
+            parent->get_type() != GPI_STRUCTURE && simulator_name.front() == ':'
+                ? ":"
+                : ".";
+    }
+    simulator_name += name;
+#ifdef NVC
+    // Preserve NVC's existing case-insensitive lookup normalization.
+    std::transform(simulator_name.begin(), simulator_name.end(),
+                   simulator_name.begin(), ::toupper);
+#endif
 
-    std::vector<char> writable(fq_name.begin(), fq_name.end());
+    std::vector<char> writable(simulator_name.begin(), simulator_name.end());
     writable.push_back('\0');
 
     new_hdl = vhpi_handle_by_name(&writable[0], NULL);
@@ -656,9 +678,11 @@ GpiObjHdl *VhpiImpl::get_child_by_index(int32_t index, GpiObjHdl *parent) {
 
         std::string idx_str = buff;
         name = '[' + idx_str + ']';
-        fq_name += (GEN_IDX_SEP_LHS + idx_str + GEN_IDX_SEP_RHS);
-
-        new_hdl = vhpi_handle_by_name(fq_name.c_str(), NULL);
+        fq_name += name;
+        std::string simulator_name = get_simulator_fullname(parent) +
+                                     GEN_IDX_SEP_LHS + idx_str +
+                                     GEN_IDX_SEP_RHS;
+        new_hdl = vhpi_handle_by_name(simulator_name.c_str(), NULL);
     } else if (obj_type == GPI_LOGIC || obj_type == GPI_LOGIC_ARRAY ||
                obj_type == GPI_ARRAY || obj_type == GPI_FIXED_STRING) {
         LOG_DEBUG("VHPI: Get child at index %d of parent %s (%s)", index,
@@ -669,7 +693,7 @@ GpiObjHdl *VhpiImpl::get_child_by_index(int32_t index, GpiObjHdl *parent) {
 
         std::string idx_str = buff;
         name += idx_str;
-        fq_name += idx_str;
+        fq_name += "[" + std::to_string(index) + "]";
 
         vhpiHandleT base_hdl = vhpi_handle(vhpiBaseType, vhpi_hdl);
 

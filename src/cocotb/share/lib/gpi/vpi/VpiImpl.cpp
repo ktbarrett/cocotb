@@ -375,14 +375,40 @@ GpiObjHdl *VpiImpl::get_child_from_handle(void *raw_hdl, GpiObjHdl *parent) {
     return new_obj;
 }
 
+std::string VpiImpl::get_simulator_fullname(GpiObjHdl *obj) {
+    // Only the owning interface can query a simulator handle's name.
+    if (!obj->is_this_impl(this)) {
+        return obj->m_impl->get_simulator_fullname(obj);
+    }
+
+    vpiHandle hdl = obj->get_handle<vpiHandle>();
+    std::string fullname = vpi_get_str(vpiFullName, hdl);
+    if (obj->get_type() == GPI_PACKAGE && fullname.size() >= 2 &&
+        fullname.compare(fullname.size() - 2, 2, "::") == 0) {
+        fullname.resize(fullname.size() - 2);
+    } else if (obj->get_type() == GPI_GENARRAY) {
+        // Generate arrays borrow the containing region's simulator handle.
+        fullname += get_type_delimiter(obj) + obj->get_name();
+    } else if (obj->get_type() == GPI_ARRAY || obj->get_type() == GPI_PACKED) {
+        // Partially indexed arrays can borrow the unindexed array's handle.
+        std::string name = vpi_get_str(vpiName, hdl);
+        if (name.length() < obj->get_name().length()) {
+            fullname += obj->get_name().substr(name.length());
+        }
+    }
+    return fullname;
+}
+
 GpiObjHdl *VpiImpl::get_child_by_name(const std::string &name,
                                       GpiObjHdl *parent) {
     const vpiHandle parent_hdl = parent->get_handle<vpiHandle>();
     std::string fq_name =
         parent->get_fullname() + get_type_delimiter(parent) + name;
+    std::string simulator_name =
+        get_simulator_fullname(parent) + get_type_delimiter(parent) + name;
 
     vpiHandle new_hdl =
-        vpi_handle_by_name(const_cast<char *>(fq_name.c_str()), NULL);
+        vpi_handle_by_name(const_cast<char *>(simulator_name.c_str()), NULL);
 
 #ifdef IUS
     if (new_hdl != NULL && vpi_get(vpiType, new_hdl) == vpiGenScope) {
@@ -502,7 +528,7 @@ GpiObjHdl *VpiImpl::get_child_by_index(int32_t index, GpiObjHdl *parent) {
                   index, parent->get_name_str());
 
         std::string idx = buff;
-        std::string hdl_name = parent->get_fullname() + idx;
+        std::string hdl_name = get_simulator_fullname(parent) + idx;
         std::vector<char> writable(hdl_name.begin(), hdl_name.end());
         writable.push_back('\0');
 
@@ -563,7 +589,7 @@ GpiObjHdl *VpiImpl::get_child_by_index(int32_t index, GpiObjHdl *parent) {
             snprintf(buff, 14, "[%d]", index);
 
             std::string idx = buff;
-            std::string hdl_name = parent->get_fullname() + idx;
+            std::string hdl_name = get_simulator_fullname(parent) + idx;
 
             std::vector<char> writable(hdl_name.begin(), hdl_name.end());
             writable.push_back('\0');

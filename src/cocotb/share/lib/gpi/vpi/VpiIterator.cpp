@@ -169,7 +169,9 @@ GpiIterator::Status VpiSingleIterator::next_handle(std::string &name,
         return GpiIterator::NATIVE_NO_NAME;
     }
 
-    std::string fq_name = c_name;
+    name = c_name;
+    // Drivers and loads need not be children of the object being iterated.
+    std::string fq_name = vpi_get_str(vpiFullName, obj);
 
     LOG_DEBUG("vpi_scan found '%s = '%s'", name.c_str(), fq_name.c_str());
 
@@ -375,7 +377,7 @@ GpiIterator::Status VpiIterator::next_handle(std::string &name, GpiObjHdl **hdl,
     std::string fq_name = m_parent->get_fullname();
     VpiImpl *vpi_impl = reinterpret_cast<VpiImpl *>(m_impl);
 
-    if (obj_type == GPI_GENARRAY) {
+    if (obj_type == GPI_GENARRAY || m_parent->get_indexable()) {
         std::size_t found = name.rfind("[");
 
         if (found != std::string::npos && name.back() == ']') {

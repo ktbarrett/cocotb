@@ -92,6 +92,8 @@ class GPI_EXPORT GpiObjHdl : public GpiHdl {
     virtual int get_signed() { return -1; }
 
     const std::string &get_name();
+    // Canonical GPI path: dots for named children, brackets for indices,
+    // and :: for package members. Not a simulator lookup name.
     const std::string &get_fullname();
 
     virtual const char *get_definition_name() {
@@ -241,6 +243,9 @@ class GPI_EXPORT GpiImplInterface {
     virtual int get_simulator_args(int *argc, char const *const **argv) = 0;
 
     /* Hierarchy related */
+    // Query the owning simulator interface; reconstruct synthetic suffixes.
+    // The returned name is for lookup, not for GPI object identity.
+    virtual std::string get_simulator_fullname(GpiObjHdl *obj) = 0;
     virtual GpiObjHdl *get_child_by_name(const std::string &name,
                                          GpiObjHdl *parent) = 0;
     virtual GpiObjHdl *get_child_by_index(int32_t index, GpiObjHdl *parent) = 0;

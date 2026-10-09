@@ -319,9 +319,10 @@ GPI_EXPORT long gpi_get_signal_value_long(gpi_sim_hdl sig_hdl);
  */
 GPI_EXPORT const char *gpi_get_signal_name_str(gpi_sim_hdl sig_hdl);
 
-/** Get signal object's fully-qualified name.
+/** Get signal object's canonical GPI path.
+ * Named children use dots, indices use brackets, and package members use ::.
  * @param sig_hdl   Signal object handle.
- * @return          Fully-qualified object name.
+ * @return          Canonical fully-qualified object name.
  */
 GPI_EXPORT const char *gpi_get_signal_fullname_str(gpi_sim_hdl sig_hdl);
 

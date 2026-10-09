@@ -266,17 +266,15 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
        return and GPI will try other implementations with the name
        */
     std::string fq_name = m_parent->get_fullname();
-    if (fq_name == ":") {
-        fq_name += name;
-    } else if (obj_type == GPI_GENARRAY) {
+    if (obj_type == GPI_GENARRAY) {
         std::size_t found = name.rfind(GEN_IDX_SEP_LHS);
 
         if (found != std::string::npos) {
-            fq_name += name.substr(found);
             const std::size_t index_begin = found + sizeof(GEN_IDX_SEP_LHS) - 1;
             const std::size_t index_length =
                 name.size() - index_begin - sizeof(GEN_IDX_SEP_RHS) + 1;
             name = "[" + name.substr(index_begin, index_length) + "]";
+            fq_name += name;
         } else {
             LOG_WARN("VHPI: Unhandled Sub-Element Format - %s", name.c_str());
             fq_name += "." + name;
@@ -287,6 +285,15 @@ GpiIterator::Status VhpiIterator::next_handle(std::string &name,
         if (found != std::string::npos) {
             fq_name += name.substr(found);
             name = name.substr(found + 1);
+        } else {
+            LOG_WARN("VHPI: Unhandled Sub-Element Format - %s", name.c_str());
+            fq_name += "." + name;
+        }
+    } else if (m_parent->get_indexable()) {
+        std::size_t found = name.rfind('(');
+        if (found != std::string::npos && name.back() == ')') {
+            fq_name +=
+                "[" + name.substr(found + 1, name.size() - found - 2) + "]";
         } else {
             LOG_WARN("VHPI: Unhandled Sub-Element Format - %s", name.c_str());
             fq_name += "." + name;

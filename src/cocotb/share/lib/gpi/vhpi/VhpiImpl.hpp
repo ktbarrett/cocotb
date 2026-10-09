@@ -300,6 +300,7 @@ class VhpiImpl : public GpiImplInterface {
                                  GpiObjHdl *parent) override;
     GpiObjHdl *get_child_by_index(int32_t index, GpiObjHdl *parent) override;
     GpiObjHdl *get_child_from_handle(void *raw_hdl, GpiObjHdl *parent) override;
+    std::string get_simulator_fullname(GpiObjHdl *obj) override;
 
     static const char *reason_to_string(int reason);
     static const char *format_to_string(int format);

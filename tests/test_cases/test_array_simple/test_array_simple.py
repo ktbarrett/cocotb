@@ -44,6 +44,13 @@ async def test_1dim_array_handles(dut):
     _check_value(tlog, dut.array_3_downto_0, [0x70, 0x60, 0x50, 0x40])
     _check_value(tlog, dut.array_0_to_3, [0x30, 0x20, 0x10, 0x00])
 
+    array = dut.array_7_downto_4
+    assert array._path == f"{dut._path}.array_7_downto_4"
+    expected_paths = {f"{array._path}[{index}]" for index in array.range}
+    assert {child._path for child in array} == expected_paths
+    for handle in array._handle.iterate(cocotb.simulator.OBJECTS):
+        assert handle.get_full_name_string() in expected_paths
+
 
 # GHDL unable to put values on nested array types (gh-2588)
 # iverilog flattens multi-dimensional unpacked arrays (gh-2595)

@@ -170,6 +170,9 @@ async def test_gen_loop(dut):
     assert isinstance(dut.asc_gen, HierarchyArrayObject)
     assert isinstance(desc_gen, HierarchyArrayObject)
     assert isinstance(asc_gen_20, HierarchyObject)
+    assert dut._path == dut._name
+    assert dut.asc_gen._path == f"{dut._path}.asc_gen"
+    assert asc_gen_20._path == f"{dut._path}.asc_gen[20]"
 
     tlog.info("Direct access found %s", asc_gen_20)
     tlog.info("Direct access found %s", desc_gen)
@@ -185,6 +188,9 @@ async def test_gen_loop(dut):
 
     for gens in dut.asc_gen:
         tlog.info("Iterate access found %s", gens)
+        index = dut.asc_gen._sub_handle_key(gens._name)
+        assert gens._path == f"{dut._path}.asc_gen[{index}]"
+        assert gens is dut.asc_gen[index]
 
 
 @cocotb.test()
@@ -313,6 +319,14 @@ async def test_discover_all(dut):
         count = 0
         for thing in obj:
             count += 1
+            if isinstance(obj, ArrayObject):
+                assert thing._path.startswith(obj._path + "[")
+                assert thing._path.endswith("]")
+            elif isinstance(obj, HierarchyArrayObject):
+                index = obj._sub_handle_key(thing._name)
+                assert thing._path == f"{obj._path}[{index}]"
+            else:
+                assert thing._path == f"{obj._path}.{thing._name}"
             tlog.info("Found %s (%s)", thing._path, type(thing))
             count += _discover(thing)
         return count
@@ -340,6 +354,7 @@ async def test_direct_constant_indexing(dut):
     assert isinstance(dut.param_cmplx[0].a, LogicObject)
     assert isinstance(dut.param_cmplx[0].b, ArrayObject)
     assert isinstance(dut.param_cmplx[0].b[1], LogicArrayObject)
+    assert dut.param_cmplx[0].b[1]._path == f"{dut._path}.param_cmplx[0].b[1]"
 
     assert isinstance(dut.const_rec, HierarchyObject)
     assert isinstance(dut.const_rec.a, LogicObject)
@@ -351,6 +366,7 @@ async def test_direct_constant_indexing(dut):
     assert isinstance(dut.const_cmplx[1].a, LogicObject)
     assert isinstance(dut.const_cmplx[1].b, ArrayObject)
     assert isinstance(dut.const_cmplx[1].b[1], LogicArrayObject)
+    assert dut.const_cmplx[1].b[1]._path == f"{dut._path}.const_cmplx[1].b[1]"
 
 
 # GHDL unable to index multi-dimensional arrays (gh-2587)
@@ -369,6 +385,8 @@ async def test_direct_signal_indexing(dut):
     assert isinstance(dut.sig_t4, ArrayObject)
     assert isinstance(dut.sig_t4[3], ArrayObject)
     assert isinstance(dut.sig_t4[3][4], ObjectType)
+    assert dut.sig_t4[3]._path == f"{dut._path}.sig_t4[3]"
+    assert dut.sig_t4[3][4]._path == f"{dut._path}.sig_t4[3][4]"
     assert isinstance(dut.sig_t5, ArrayObject)
     assert isinstance(dut.sig_t5[1], ArrayObject)
     assert isinstance(dut.sig_t5[1][0], ObjectType)
@@ -386,11 +404,18 @@ async def test_direct_signal_indexing(dut):
     assert isinstance(dut.sig_cmplx[1].a, LogicObject)
     assert isinstance(dut.sig_cmplx[1].b, ArrayObject)
     assert isinstance(dut.sig_cmplx[1].b[1], ObjectType)
+    assert dut.sig_cmplx[1].b[1]._path == f"{dut._path}.sig_cmplx[1].b[1]"
 
     assert isinstance(dut.sig_rec, HierarchyObject)
     assert isinstance(dut.sig_rec.a, LogicObject)
     assert isinstance(dut.sig_rec.b, ArrayObject)
     assert isinstance(dut.sig_rec.b[1], ObjectType)
+
+    # Exercise native GPI iteration too; Python array iteration uses indexing.
+    for array in (dut.sig_t2, dut.sig_cmplx):
+        expected_paths = {child._path for child in array}
+        for handle in array._handle.iterate(cocotb.simulator.OBJECTS):
+            assert handle.get_full_name_string() in expected_paths
 
 
 @cocotb.test(skip=(LANGUAGE in ["verilog"]))
