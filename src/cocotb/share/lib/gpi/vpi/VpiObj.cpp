@@ -9,6 +9,31 @@
 #include "../logging.hpp"
 #include "./VpiImpl.hpp"
 
+int get_range_bounds(vpiHandle obj, int &left, int &right) {
+    s_vpi_value val;
+    val.format = vpiIntVal;
+
+    vpiHandle leftRange = vpi_handle(vpiLeftRange, obj);
+    if (leftRange == NULL) {
+        check_vpi_error();
+        return -1;
+    }
+    vpi_get_value(leftRange, &val);
+    left = val.value.integer;
+    vpi_free_object(leftRange);
+
+    vpiHandle rightRange = vpi_handle(vpiRightRange, obj);
+    if (rightRange == NULL) {
+        check_vpi_error();
+        return -1;
+    }
+    vpi_get_value(rightRange, &val);
+    right = val.value.integer;
+    vpi_free_object(rightRange);
+
+    return 0;
+}
+
 int VpiArrayObjHdl::initialise(const std::string &name,
                                const std::string &fq_name) {
     vpiHandle hdl = GpiObjHdl::get_handle<vpiHandle>();
@@ -38,41 +63,40 @@ int VpiArrayObjHdl::initialise(const std::string &name,
 
     /* After determining the range_idx, get the range and set the limits */
     vpiHandle iter = vpi_iterate(vpiRange, hdl);
-    vpiHandle rangeHdl;
 
     if (iter != NULL) {
-        rangeHdl = vpi_scan(iter);
+        vpiHandle rangeHdl = vpi_scan(iter);
 
 // Questa and VCS vpiRange iter always starts from the first index of the array.
 #if defined(MODELSIM) || defined(VCS)
-        for (int i = 0; i < range_idx; ++i) {
+        for (int i = 0; rangeHdl != NULL && i < range_idx; ++i) {
+            vpi_free_object(rangeHdl);
             rangeHdl = vpi_scan(iter);
-            if (rangeHdl == NULL) {
-                break;
-            }
         }
 #endif
         if (rangeHdl == NULL) {
+            // vpi_scan has already freed the exhausted iterator.
             LOG_ERROR("Unable to get range for indexable array");
             return -1;
         }
-        vpi_free_object(iter);  // Need to free iterator since exited early
+        DEFER(vpi_free_object(iter));
+        DEFER(vpi_free_object(rangeHdl));
+
+        if (get_range_bounds(rangeHdl, m_range_left, m_range_right) < 0) {
+            LOG_ERROR("Unable to get range bounds for indexable array");
+            return -1;
+        }
     } else if (range_idx == 0) {
-        rangeHdl = hdl;
+        // iter == NULL, so no looking through multiple dimensions is possible,
+        // but perhaps we can get the first dimension.
+        if (get_range_bounds(hdl, m_range_left, m_range_right) < 0) {
+            LOG_ERROR("Unable to get range bounds for indexable array");
+            return -1;
+        }
     } else {
         LOG_ERROR("Unable to get range for indexable array or memory");
         return -1;
     }
-
-    s_vpi_value val;
-    val.format = vpiIntVal;
-    vpi_get_value(vpi_handle(vpiLeftRange, rangeHdl), &val);
-    check_vpi_error();
-    m_range_left = val.value.integer;
-
-    vpi_get_value(vpi_handle(vpiRightRange, rangeHdl), &val);
-    check_vpi_error();
-    m_range_right = val.value.integer;
 
     /* vpiSize will return a size that is incorrect for multi-dimensional arrays
      * so use the range to calculate the m_num_elems.
